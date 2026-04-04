@@ -18,7 +18,7 @@ export type TabParamList = {
   Earnings: undefined;
 };
 
-const Tab = createBottomTabNavigator<TabParamList>();
+const Tab = createBottomTabNavigator();
 
 function TabNavigator() {
   return (
@@ -33,12 +33,18 @@ function TabNavigator() {
       <Tab.Screen
         name="Home"
         component={HomeScreen}
-        options={{ tabBarLabel: 'Rides', tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>🚖</Text> }}
+        options={{
+          tabBarLabel: 'Rides',
+          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>🚖</Text>,
+        }}
       />
       <Tab.Screen
         name="Earnings"
         component={EarningsScreen}
-        options={{ tabBarLabel: 'Earnings', tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>💰</Text> }}
+        options={{
+          tabBarLabel: 'Earnings',
+          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>💰</Text>,
+        }}
       />
     </Tab.Navigator>
   );
@@ -54,7 +60,7 @@ export type RootStackParamList = {
   ActiveRide: { rideId: string };
 };
 
-const Stack = createNativeStackNavigator<RootStackParamList>();
+const Stack = createNativeStackNavigator();
 
 export function AppNavigator() {
   const token = useAuthStore((s) => s.token);
