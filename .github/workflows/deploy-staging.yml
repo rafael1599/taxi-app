@@ -1,0 +1,38 @@
+name: Deploy — Staging
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy API to staging (Railway)
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to staging
+        run: railway up --service api --detach
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_STAGING }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID_STAGING }}
+
+      - name: Run DB migrations on staging
+        run: railway run --service api npm run db:migrate
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_STAGING }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID_STAGING }}
