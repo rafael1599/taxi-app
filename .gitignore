@@ -35,3 +35,7 @@ coverage/
 # Expo
 ios/
 android/
+
+# Claude (skills symlink + local config)
+.claude/skills
+.claude/skills/
