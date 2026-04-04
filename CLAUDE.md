@@ -2,7 +2,7 @@
 
 ## Project Structure
 
-Monorepo with npm workspaces:
+Monorepo with pnpm workspaces:
 
 - `apps/api` — Fastify REST API (port 3000)
 - `apps/admin` — React + Vite admin dashboard (port 3001, falls back to 3002+ if busy)
@@ -25,7 +25,7 @@ docker compose up -d
 ### 2. Database Migration
 
 ```bash
-npm run db:migrate
+pnpm db:migrate
 ```
 
 Uses custom SQL migration script (`packages/db/scripts/migrate.ts`), NOT drizzle-kit.
@@ -43,7 +43,7 @@ This endpoint is guarded — it only works when zero admins exist.
 ### 4. Start Dev Servers
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
 Runs API + Admin concurrently.
@@ -75,15 +75,15 @@ Copy `.env.example` to `.env`. Key vars:
 
 ## Scripts
 
-| Command               | Description                 |
-| --------------------- | --------------------------- |
-| `npm run dev`         | Start API + Admin dashboard |
-| `npm run db:migrate`  | Run SQL migrations          |
-| `npm run db:generate` | Generate Drizzle schema     |
-| `npm run build`       | Build all workspaces        |
-| `npm run test`        | Run all tests               |
-| `npm run lint`        | ESLint across project       |
-| `npm run type-check`  | TypeScript check            |
+| Command            | Description                 |
+| ------------------ | --------------------------- |
+| `pnpm dev`         | Start API + Admin dashboard |
+| `pnpm db:migrate`  | Run SQL migrations          |
+| `pnpm db:generate` | Generate Drizzle schema     |
+| `pnpm build`       | Build all workspaces        |
+| `pnpm test`        | Run all tests               |
+| `pnpm lint`        | ESLint across project       |
+| `pnpm type-check`  | TypeScript check            |
 
 ## Skills
 

@@ -2,17 +2,14 @@
   "name": "rockland-taxi",
   "version": "0.1.0",
   "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
+  "packageManager": "pnpm@10.25.0",
   "scripts": {
-    "dev": "concurrently \"npm run dev -w apps/api\" \"npm run dev -w apps/admin\"",
-    "driver": "npm run start -w apps/driver",
-    "build": "npm run build --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present",
-    "db:generate": "npm run generate -w packages/db",
-    "db:migrate": "npm run migrate -w packages/db",
+    "dev": "concurrently \"pnpm --filter @rockland-taxi/api dev\" \"pnpm --filter @rockland-taxi/admin dev\"",
+    "driver": "pnpm --filter @rockland-taxi/driver start",
+    "build": "pnpm -r --if-present run build",
+    "test": "pnpm -r --if-present run test",
+    "db:generate": "pnpm --filter @rockland-taxi/db generate",
+    "db:migrate": "pnpm --filter @rockland-taxi/db migrate",
     "lint": "eslint . --ext .ts,.tsx --ignore-path .gitignore",
     "type-check": "tsc --noEmit",
     "prepare": "husky"
@@ -39,7 +36,6 @@
     ]
   },
   "engines": {
-    "node": ">=22.0.0",
-    "npm": ">=10.0.0"
+    "node": ">=22.0.0"
   }
 }
