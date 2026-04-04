@@ -116,6 +116,20 @@ CREATE INDEX rides_status_idx       ON rides (status)
 CREATE INDEX rides_rider_id_idx     ON rides (rider_id, created_at DESC);
 CREATE INDEX rides_driver_id_idx    ON rides (driver_id, created_at DESC);
 
+-- Admins
+CREATE TYPE admin_role AS ENUM ('super_admin', 'dispatcher', 'viewer');
+
+CREATE TABLE admins (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  full_name     TEXT NOT NULL,
+  email         TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  role          admin_role NOT NULL DEFAULT 'viewer',
+  is_active     BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Payments
 CREATE TABLE payments (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
