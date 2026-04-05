@@ -6,6 +6,6 @@ CREATE INDEX IF NOT EXISTS payments_status_idx ON payments (status);
 -- Add spatial GiST index for driver location proximity queries
 CREATE INDEX IF NOT EXISTS drivers_location_gist_idx
   ON drivers USING gist (
-    ST_MakePoint(current_lng, current_lat)::geography
+    (ST_MakePoint(current_lng, current_lat)::geography)
   )
   WHERE current_lat IS NOT NULL AND current_lng IS NOT NULL;

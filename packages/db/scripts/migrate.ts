@@ -22,24 +22,32 @@ async function run() {
       )
     `);
 
-    const files = (await readdir(MIGRATIONS_DIR))
-      .filter((f) => f.endsWith('.sql'))
-      .sort();
+    const files = (await readdir(MIGRATIONS_DIR)).filter((f) => f.endsWith('.sql')).sort();
 
     for (const file of files) {
-      const { rows } = await client.query(
-        'SELECT 1 FROM _migrations WHERE filename = $1',
-        [file],
-      );
+      const { rows } = await client.query('SELECT 1 FROM _migrations WHERE filename = $1', [file]);
       if (rows.length > 0) {
         console.log(`  skip  ${file}`);
         continue;
       }
 
       const sql = await readFile(join(MIGRATIONS_DIR, file), 'utf8');
-      await client.query('BEGIN');
+
+      // ALTER TYPE ... ADD VALUE cannot be used inside a transaction
+      // (new enum values must be committed before use). Extract these
+      // statements and run them before the transactional block.
+      const enumAddValueRe = /^ALTER\s+TYPE\s+\S+\s+ADD\s+VALUE\b[^;]*;/gim;
+      const enumStatements = sql.match(enumAddValueRe) || [];
+      const remainingSql = sql.replace(enumAddValueRe, '').trim();
+
       try {
-        await client.query(sql);
+        for (const stmt of enumStatements) {
+          await client.query(stmt);
+        }
+        await client.query('BEGIN');
+        if (remainingSql) {
+          await client.query(remainingSql);
+        }
         await client.query('INSERT INTO _migrations (filename) VALUES ($1)', [file]);
         await client.query('COMMIT');
         console.log(`  apply ${file}`);
