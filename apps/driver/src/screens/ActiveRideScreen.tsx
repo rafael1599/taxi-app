@@ -126,7 +126,10 @@ export function ActiveRideScreen({ navigation, route }: Props) {
             try {
               await tripApi.updateStatus(ride.id, 'completed');
               setActiveRide(null);
-              navigation.replace('Tabs');
+              navigation.replace('RateRider', {
+                rideId: ride.id,
+                fare: ride.fareEstimate ?? undefined,
+              });
             } catch {
               Alert.alert('Error', 'Could not complete trip.');
             } finally {

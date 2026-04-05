@@ -128,6 +128,13 @@ export const rideApi = {
   cancel: (id: string, reason?: string) => apiClient.post<Ride>(`/rides/${id}/cancel`, { reason }),
 };
 
+// ── Ratings ──────────────────────────────────────────────────────────────────
+
+export const ratingApi = {
+  rateRider: (rideId: string, score: number, comment?: string) =>
+    apiClient.post(`/rides/${rideId}/rate-rider`, { score, comment }),
+};
+
 // ── SSE URL helper ──────────────────────────────────────────────────────────
 
 export function getSSEUrl(): string {

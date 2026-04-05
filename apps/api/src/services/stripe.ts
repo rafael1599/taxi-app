@@ -195,6 +195,117 @@ export async function getDriverSubscriptionStatus(driverId: string) {
   };
 }
 
+// ── Ride Payment (charge at completion) ──────────────────────────────────────
+
+/** Charge a rider's saved payment method for a completed ride */
+export async function chargeRidePayment(rideId: string) {
+  const stripe = getStripe();
+
+  const ride = await db.query.rides.findFirst({
+    where: eq(schema.rides.id, rideId),
+  });
+  if (!ride || ride.status !== 'completed') {
+    throw new Error('Ride not found or not completed');
+  }
+
+  const rider = await db.query.riders.findFirst({
+    where: eq(schema.riders.id, ride.riderId),
+  });
+  if (!rider) throw new Error('Rider not found');
+
+  // Find the pending payment record created at trip completion
+  const [payment] = await db
+    .select()
+    .from(schema.payments)
+    .where(and(eq(schema.payments.rideId, rideId), eq(schema.payments.status, 'pending')))
+    .limit(1);
+
+  if (!payment) throw new Error('No pending payment for this ride');
+
+  const amountCents = Math.round(parseFloat(payment.amount) * 100);
+
+  // If rider has no Stripe customer, mark as cash payment
+  if (!rider.stripeCustomerId) {
+    await db
+      .update(schema.payments)
+      .set({ status: 'captured', capturedAt: new Date() })
+      .where(eq(schema.payments.id, payment.id));
+    return { paymentId: payment.id, method: 'cash' };
+  }
+
+  try {
+    // Get default payment method
+    const customer = await stripe.customers.retrieve(rider.stripeCustomerId);
+    if (customer.deleted) throw new Error('Stripe customer deleted');
+
+    const defaultPm = (customer as Stripe.Customer).invoice_settings?.default_payment_method as
+      | string
+      | null;
+
+    if (!defaultPm) {
+      // No saved card — mark as cash
+      await db
+        .update(schema.payments)
+        .set({ status: 'captured', capturedAt: new Date() })
+        .where(eq(schema.payments.id, payment.id));
+      return { paymentId: payment.id, method: 'cash' };
+    }
+
+    // Get company Stripe Connect account for destination charge
+    const company = await db.query.companies.findFirst({
+      where: eq(schema.companies.id, ride.companyId),
+    });
+
+    const piParams: Stripe.PaymentIntentCreateParams = {
+      amount: amountCents,
+      currency: payment.currency.toLowerCase(),
+      customer: rider.stripeCustomerId,
+      payment_method: defaultPm,
+      confirm: true,
+      off_session: true,
+      metadata: {
+        rideId: ride.id,
+        riderId: ride.riderId,
+        companyId: ride.companyId,
+      },
+    };
+
+    // If company has Stripe Connect, use destination charge
+    if (company?.stripeAccountId) {
+      const commissionPct = parseFloat(company.commissionPercent);
+      const platformFee = Math.round(amountCents * (commissionPct / 100));
+      piParams.transfer_data = { destination: company.stripeAccountId };
+      piParams.application_fee_amount = platformFee;
+    }
+
+    const pi = await stripe.paymentIntents.create(piParams);
+
+    await db
+      .update(schema.payments)
+      .set({
+        stripePiId: pi.id,
+        stripePmId: defaultPm,
+        status: pi.status === 'succeeded' ? 'captured' : 'authorized',
+        capturedAt: pi.status === 'succeeded' ? new Date() : undefined,
+      })
+      .where(eq(schema.payments.id, payment.id));
+
+    return { paymentId: payment.id, paymentIntentId: pi.id, method: 'card' };
+  } catch (err: any) {
+    // Card declined or other error
+    await db
+      .update(schema.payments)
+      .set({
+        status: 'failed',
+        failureReason: err.message ?? 'Payment failed',
+        failedAt: new Date(),
+      })
+      .where(eq(schema.payments.id, payment.id));
+
+    return { paymentId: payment.id, method: 'card', error: err.message };
+  }
+}
+
 // ── Commission Tracking ───────────────────────────────────────────────────────
 
 /** Record commission for a completed ride */

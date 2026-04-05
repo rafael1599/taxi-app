@@ -1,12 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ActivityIndicator,
-  Alert,
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
@@ -19,7 +12,10 @@ type Props = {
   route: RouteProp<RootStackParamList, 'ActiveRide'>;
 };
 
-interface LatLng { latitude: number; longitude: number }
+interface LatLng {
+  latitude: number;
+  longitude: number;
+}
 
 const STATUS_LABELS: Record<RideStatus, string> = {
   requested: '🔍 Finding your driver…',
@@ -91,7 +87,14 @@ export function ActiveRideScreen({ navigation, route }: Props) {
   };
 
   const handleDone = () => {
-    navigation.replace('Tabs');
+    if (ride?.status === 'completed') {
+      navigation.replace('RateRide', {
+        rideId,
+        fare: ride.fareFinal ?? ride.fareEstimate ?? undefined,
+      });
+    } else {
+      navigation.replace('Tabs');
+    }
   };
 
   if (!ride) {
@@ -126,11 +129,7 @@ export function ActiveRideScreen({ navigation, route }: Props) {
         <Marker coordinate={pickupCoord} title="Pickup" pinColor="green" />
         <Marker coordinate={dropoffCoord} title="Drop-off" pinColor="red" />
         {driverPos && (
-          <Polyline
-            coordinates={[driverPos, pickupCoord]}
-            strokeColor="#4caf50"
-            strokeWidth={3}
-          />
+          <Polyline coordinates={[driverPos, pickupCoord]} strokeColor="#4caf50" strokeWidth={3} />
         )}
         <Polyline
           coordinates={[pickupCoord, dropoffCoord]}
@@ -177,7 +176,9 @@ export function ActiveRideScreen({ navigation, route }: Props) {
 
         {isTerminal ? (
           <TouchableOpacity style={styles.primaryBtn} onPress={handleDone}>
-            <Text style={styles.primaryBtnText}>Back to Home</Text>
+            <Text style={styles.primaryBtnText}>
+              {ride.status === 'completed' ? 'Rate Your Ride' : 'Back to Home'}
+            </Text>
           </TouchableOpacity>
         ) : (
           <TouchableOpacity

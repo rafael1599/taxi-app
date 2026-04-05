@@ -5,6 +5,7 @@ import { api } from '../api/client';
 
 const navItems = [
   { to: '/dashboard', label: 'Dashboard', page: 'dashboard' },
+  { to: '/analytics', label: 'Analytics', page: 'analytics' },
   { to: '/map', label: 'Live Map', page: 'map' },
   { to: '/drivers', label: 'Drivers', page: 'drivers' },
   { to: '/rides', label: 'Rides', page: 'rides' },
@@ -17,6 +18,7 @@ const navItems = [
 const ROLE_ACCESS: Record<string, string[]> = {
   platform_admin: [
     'dashboard',
+    'analytics',
     'drivers',
     'rides',
     'map',
@@ -27,6 +29,7 @@ const ROLE_ACCESS: Record<string, string[]> = {
   ],
   super_admin: [
     'dashboard',
+    'analytics',
     'drivers',
     'rides',
     'map',
@@ -35,8 +38,8 @@ const ROLE_ACCESS: Record<string, string[]> = {
     'whatsapp',
     'billing',
   ],
-  dispatcher: ['dashboard', 'rides', 'map'],
-  viewer: ['dashboard'],
+  dispatcher: ['dashboard', 'analytics', 'rides', 'map'],
+  viewer: ['dashboard', 'analytics'],
 };
 
 const s: Record<string, React.CSSProperties> = {
@@ -157,8 +160,8 @@ export default function Layout() {
         <nav style={s.nav}>
           {(() => {
             const allowed = ROLE_ACCESS[user?.adminRole ?? ''] ?? [];
-            const visibleOps = navItems.slice(0, 4).filter((i) => allowed.includes(i.page));
-            const visibleConfig = navItems.slice(4).filter((i) => allowed.includes(i.page));
+            const visibleOps = navItems.slice(0, 5).filter((i) => allowed.includes(i.page));
+            const visibleConfig = navItems.slice(5).filter((i) => allowed.includes(i.page));
             return (
               <>
                 {visibleOps.length > 0 && <div style={s.sectionLabel}>Operations</div>}

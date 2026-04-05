@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { db, schema } from '@rockland-taxi/db';
-import { eq, desc, count, and, inArray } from 'drizzle-orm';
+import { eq, desc, count, and, inArray, sql, gte, lte } from 'drizzle-orm';
 import { requireAdmin, getCompanyId } from '../middleware/auth.js';
 
 export async function adminRoutes(app: FastifyInstance) {
@@ -197,6 +197,126 @@ export async function adminRoutes(app: FastifyInstance) {
         isAvailable: true,
       },
     });
+  });
+
+  // GET /admin/analytics — KPI metrics (company-scoped)
+  app.get('/admin/analytics', { preHandler: requireAdmin }, async (request) => {
+    const companyId = getCompanyId(request);
+    const { from, to } = request.query as { from?: string; to?: string };
+
+    const dateFrom = from ? new Date(from) : new Date(Date.now() - 30 * 86400_000); // last 30 days
+    const dateTo = to ? new Date(to) : new Date();
+
+    const companyFilter = companyId ? eq(schema.rides.companyId, companyId) : undefined;
+    const dateFilter = and(
+      gte(schema.rides.createdAt, dateFrom),
+      lte(schema.rides.createdAt, dateTo),
+    );
+    const baseWhere = companyFilter ? and(companyFilter, dateFilter) : dateFilter;
+
+    // Total rides, completed, cancelled, completion rate
+    const [rideStats] = await db
+      .select({
+        total: count(),
+        completed: sql<number>`COUNT(*) FILTER (WHERE ${schema.rides.status} = 'completed')::int`,
+        cancelled: sql<number>`COUNT(*) FILTER (WHERE ${schema.rides.status} = 'cancelled')::int`,
+      })
+      .from(schema.rides)
+      .where(baseWhere);
+
+    const completionRate =
+      rideStats.total > 0 ? Math.round((rideStats.completed / rideStats.total) * 100) : 0;
+
+    // Revenue
+    const paymentWhere = companyId
+      ? and(
+          eq(schema.payments.companyId, companyId),
+          eq(schema.payments.status, 'captured'),
+          gte(schema.payments.createdAt, dateFrom),
+          lte(schema.payments.createdAt, dateTo),
+        )
+      : and(
+          eq(schema.payments.status, 'captured'),
+          gte(schema.payments.createdAt, dateFrom),
+          lte(schema.payments.createdAt, dateTo),
+        );
+
+    const [revenue] = await db
+      .select({
+        totalRevenue: sql<string>`COALESCE(SUM(${schema.payments.amount}), 0)`,
+        avgFare: sql<string>`COALESCE(AVG(${schema.payments.amount}), 0)`,
+      })
+      .from(schema.payments)
+      .where(paymentWhere);
+
+    // Average driver rating
+    const ratingWhere = companyId
+      ? and(
+          eq(schema.ratings.companyId, companyId),
+          gte(schema.ratings.createdAt, dateFrom),
+          lte(schema.ratings.createdAt, dateTo),
+          sql`${schema.ratings.toDriverId} IS NOT NULL`,
+        )
+      : and(
+          gte(schema.ratings.createdAt, dateFrom),
+          lte(schema.ratings.createdAt, dateTo),
+          sql`${schema.ratings.toDriverId} IS NOT NULL`,
+        );
+
+    const [ratingStats] = await db
+      .select({
+        avgRating: sql<string>`COALESCE(ROUND(AVG(${schema.ratings.score}), 2), 0)`,
+        totalRatings: sql<number>`COUNT(*)::int`,
+      })
+      .from(schema.ratings)
+      .where(ratingWhere);
+
+    // Rides per day (for chart)
+    const dailyRides = await db
+      .select({
+        date: sql<string>`DATE(${schema.rides.createdAt})::text`,
+        total: count(),
+        completed: sql<number>`COUNT(*) FILTER (WHERE ${schema.rides.status} = 'completed')::int`,
+      })
+      .from(schema.rides)
+      .where(baseWhere)
+      .groupBy(sql`DATE(${schema.rides.createdAt})`)
+      .orderBy(sql`DATE(${schema.rides.createdAt})`);
+
+    // Top 5 drivers by rides completed
+    const topDrivers = await db
+      .select({
+        driverId: schema.rides.driverId,
+        driverName: schema.drivers.fullName,
+        completedRides: sql<number>`COUNT(*) FILTER (WHERE ${schema.rides.status} = 'completed')::int`,
+        avgRating: sql<string>`COALESCE(${schema.drivers.avgRating}, 0)`,
+      })
+      .from(schema.rides)
+      .innerJoin(schema.drivers, eq(schema.rides.driverId, schema.drivers.id))
+      .where(and(baseWhere, sql`${schema.rides.driverId} IS NOT NULL`))
+      .groupBy(schema.rides.driverId, schema.drivers.fullName, schema.drivers.avgRating)
+      .orderBy(sql`COUNT(*) FILTER (WHERE ${schema.rides.status} = 'completed') DESC`)
+      .limit(5);
+
+    return {
+      period: { from: dateFrom.toISOString(), to: dateTo.toISOString() },
+      rides: {
+        total: rideStats.total,
+        completed: rideStats.completed,
+        cancelled: rideStats.cancelled,
+        completionRate,
+      },
+      revenue: {
+        total: parseFloat(revenue.totalRevenue).toFixed(2),
+        avgFare: parseFloat(revenue.avgFare).toFixed(2),
+      },
+      ratings: {
+        avgDriverRating: parseFloat(ratingStats.avgRating).toFixed(2),
+        totalRatings: ratingStats.totalRatings,
+      },
+      dailyRides,
+      topDrivers,
+    };
   });
 
   // GET /admin/audit-log — audit log for state transitions (company-scoped)

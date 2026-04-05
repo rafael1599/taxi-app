@@ -10,6 +10,7 @@ import { HomeScreen } from '../screens/HomeScreen';
 import { EarningsScreen } from '../screens/EarningsScreen';
 import { RideRequestScreen } from '../screens/RideRequestScreen';
 import { ActiveRideScreen } from '../screens/ActiveRideScreen';
+import { RateRiderScreen } from '../screens/RateRiderScreen';
 
 // ── Tab navigator (main app) ──────────────────────────────────────────────────
 
@@ -58,6 +59,7 @@ export type RootStackParamList = {
   Tabs: undefined;
   RideRequest: { offerId: string };
   ActiveRide: { rideId: string };
+  RateRider: { rideId: string; fare?: string };
 };
 
 const Stack = createNativeStackNavigator();
@@ -79,6 +81,11 @@ export function AppNavigator() {
               options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
             />
             <Stack.Screen name="ActiveRide" component={ActiveRideScreen} />
+            <Stack.Screen
+              name="RateRider"
+              component={RateRiderScreen}
+              options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+            />
           </>
         ) : (
           <>

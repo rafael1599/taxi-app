@@ -10,6 +10,7 @@ import PricingPage from './pages/PricingPage';
 import CompanySettingsPage from './pages/CompanySettingsPage';
 import WhatsAppPage from './pages/WhatsAppPage';
 import BillingPage from './pages/BillingPage';
+import AnalyticsPage from './pages/AnalyticsPage';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const user = useAuthStore((s) => s.user);
@@ -20,6 +21,7 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 const ROLE_ACCESS: Record<string, string[]> = {
   platform_admin: [
     'dashboard',
+    'analytics',
     'drivers',
     'rides',
     'map',
@@ -30,6 +32,7 @@ const ROLE_ACCESS: Record<string, string[]> = {
   ],
   super_admin: [
     'dashboard',
+    'analytics',
     'drivers',
     'rides',
     'map',
@@ -38,8 +41,8 @@ const ROLE_ACCESS: Record<string, string[]> = {
     'whatsapp',
     'billing',
   ],
-  dispatcher: ['dashboard', 'rides', 'map'],
-  viewer: ['dashboard'],
+  dispatcher: ['dashboard', 'analytics', 'rides', 'map'],
+  viewer: ['dashboard', 'analytics'],
 };
 
 function RoleRoute({ page, children }: { page: string; children: React.ReactNode }) {
@@ -65,6 +68,14 @@ export default function App() {
       >
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<DashboardPage />} />
+        <Route
+          path="analytics"
+          element={
+            <RoleRoute page="analytics">
+              <AnalyticsPage />
+            </RoleRoute>
+          }
+        />
         <Route
           path="drivers"
           element={

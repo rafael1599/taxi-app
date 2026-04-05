@@ -117,6 +117,23 @@ export const rideApi = {
   cancel: (id: string, reason?: string) => apiClient.post<Ride>(`/rides/${id}/cancel`, { reason }),
 };
 
+// ── Ratings ──────────────────────────────────────────────────────────────────
+
+export interface Rating {
+  id: string;
+  rideId: string;
+  score: number;
+  comment: string | null;
+  createdAt: string;
+}
+
+export const ratingApi = {
+  submit: (rideId: string, score: number, comment?: string) =>
+    apiClient.post<Rating>(`/rides/${rideId}/rate`, { score, comment }),
+
+  hasRated: (rideId: string) => apiClient.get<{ rated: boolean }>(`/rides/${rideId}/rated`),
+};
+
 // ── Payment methods ───────────────────────────────────────────────────────────
 
 export interface PaymentMethod {

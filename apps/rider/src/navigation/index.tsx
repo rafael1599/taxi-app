@@ -13,6 +13,7 @@ import { BookRideScreen } from '../screens/BookRideScreen';
 import { ActiveRideScreen } from '../screens/ActiveRideScreen';
 import { TripHistoryScreen } from '../screens/TripHistoryScreen';
 import { PaymentScreen } from '../screens/PaymentScreen';
+import { RateRideScreen } from '../screens/RateRideScreen';
 
 // ── Tab navigator ─────────────────────────────────────────────────────────────
 
@@ -37,17 +38,26 @@ function TabNavigator() {
       <Tab.Screen
         name="Home"
         component={HomeScreen}
-        options={{ tabBarLabel: 'Ride', tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>🚕</Text> }}
+        options={{
+          tabBarLabel: 'Ride',
+          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>🚕</Text>,
+        }}
       />
       <Tab.Screen
         name="History"
         component={TripHistoryScreen}
-        options={{ tabBarLabel: 'Trips', tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>🕓</Text> }}
+        options={{
+          tabBarLabel: 'Trips',
+          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>🕓</Text>,
+        }}
       />
       <Tab.Screen
         name="Payment"
         component={PaymentScreen}
-        options={{ tabBarLabel: 'Payment', tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>💳</Text> }}
+        options={{
+          tabBarLabel: 'Payment',
+          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>💳</Text>,
+        }}
       />
     </Tab.Navigator>
   );
@@ -61,6 +71,7 @@ export type RootStackParamList = {
   Tabs: undefined;
   BookRide: undefined;
   ActiveRide: { rideId: string };
+  RateRide: { rideId: string; fare?: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -86,6 +97,11 @@ function AuthenticatedNavigator() {
         options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
       />
       <Stack.Screen name="ActiveRide" component={ActiveRideScreen} />
+      <Stack.Screen
+        name="RateRide"
+        component={RateRideScreen}
+        options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+      />
     </Stack.Navigator>
   );
 }

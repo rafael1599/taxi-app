@@ -20,6 +20,7 @@ import {
   notifyRiderTripCompleted,
   notifyRiderNoDriverFound,
 } from './pushNotifications.js';
+import { chargeRidePayment, recordCommission } from './stripe.js';
 import type { Job } from 'bullmq';
 import type { TripJobData } from './tripQueue.js';
 
@@ -610,6 +611,12 @@ export async function updateTripStatus(
     await clearActiveTrip(driverId);
     logDriverTransition(driverId, companyId, 'completed', 'idle').catch(console.error);
 
+    // Set final fare
+    await db
+      .update(schema.rides)
+      .set({ fareFinal: ride.fareEstimate })
+      .where(eq(schema.rides.id, rideId));
+
     // Create payment record
     await db.insert(schema.payments).values({
       companyId,
@@ -618,6 +625,16 @@ export async function updateTripStatus(
       amount: ride.fareEstimate ?? '0.00',
       currency: 'USD',
       status: 'pending',
+    });
+
+    // Charge rider's card (async, non-blocking)
+    chargeRidePayment(rideId).catch((err) => {
+      console.error(`[Payment] Failed to charge ride ${rideId}:`, err.message);
+    });
+
+    // Record commission (async, non-blocking)
+    recordCommission(rideId).catch((err) => {
+      console.error(`[Commission] Failed to record for ride ${rideId}:`, err.message);
     });
   }
 

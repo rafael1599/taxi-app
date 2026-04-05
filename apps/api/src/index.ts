@@ -21,6 +21,7 @@ import { pricingRoutes } from './routes/pricing.js';
 import { tripLifecycleRoutes } from './routes/tripLifecycle.js';
 import { whatsappRoutes } from './routes/whatsapp.js';
 import { billingRoutes } from './routes/billing.js';
+import { ratingRoutes } from './routes/ratings.js';
 import { initWhatsAppSessions } from './services/whatsapp.js';
 import { initSentry } from './plugins/sentry.js';
 
@@ -118,6 +119,7 @@ export async function buildApp() {
   await app.register(tripLifecycleRoutes, { prefix: '/api/v1' });
   await app.register(whatsappRoutes, { prefix: '/api/v1' });
   await app.register(billingRoutes, { prefix: '/api/v1' });
+  await app.register(ratingRoutes, { prefix: '/api/v1' });
 
   // Initialize Redis-backed services after server is ready
   app.addHook('onReady', async () => {

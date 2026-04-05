@@ -105,6 +105,8 @@ export const riders = pgTable('riders', {
   avatarUrl: text('avatar_url'),
   stripeCustomerId: text('stripe_cust'),
   pushToken: text('push_token'),
+  avgRating: numeric('avg_rating', { precision: 3, scale: 2 }),
+  totalRatings: integer('total_ratings').notNull().default(0),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
@@ -134,6 +136,8 @@ export const drivers = pgTable(
     currentLng: doublePrecision('current_lng'),
     locationAt: timestamp('location_at'),
     pushToken: text('push_token'),
+    avgRating: numeric('avg_rating', { precision: 3, scale: 2 }),
+    totalRatings: integer('total_ratings').notNull().default(0),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
@@ -245,6 +249,8 @@ export const payments = pgTable(
     commissionAmount: numeric('commission_amount', { precision: 10, scale: 2 }),
     capturedAt: timestamp('captured_at'),
     refundedAt: timestamp('refunded_at'),
+    failureReason: text('failure_reason'),
+    failedAt: timestamp('failed_at'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
   },
   (t) => [
@@ -382,6 +388,34 @@ export const stripeWebhookEvents = pgTable('stripe_webhook_events', {
   processedAt: timestamp('processed_at').notNull().defaultNow(),
   companyId: uuid('company_id').references(() => companies.id),
 });
+
+// ── Ratings ───────────────────────────────────────────────────────────────────
+
+export const ratings = pgTable(
+  'ratings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    companyId: uuid('company_id')
+      .notNull()
+      .references(() => companies.id, { onDelete: 'cascade' }),
+    rideId: uuid('ride_id')
+      .notNull()
+      .references(() => rides.id, { onDelete: 'cascade' }),
+    fromDriverId: uuid('from_driver_id').references(() => drivers.id),
+    fromRiderId: uuid('from_rider_id').references(() => riders.id),
+    toDriverId: uuid('to_driver_id').references(() => drivers.id),
+    toRiderId: uuid('to_rider_id').references(() => riders.id),
+    score: integer('score').notNull(), // 1-5 stars
+    comment: text('comment'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    index('ratings_ride_id_idx').on(t.rideId),
+    index('ratings_to_driver_id_idx').on(t.toDriverId),
+    index('ratings_to_rider_id_idx').on(t.toRiderId),
+    index('ratings_company_id_idx').on(t.companyId),
+  ],
+);
 
 // ── Admins ──────────────────────────────────────────────────────────────────
 
