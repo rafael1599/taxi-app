@@ -16,6 +16,41 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
   return user ? <>{children}</> : <Navigate to="/login" replace />;
 }
 
+// Role-based access: which roles can access which routes
+const ROLE_ACCESS: Record<string, string[]> = {
+  platform_admin: [
+    'dashboard',
+    'drivers',
+    'rides',
+    'map',
+    'pricing',
+    'settings',
+    'whatsapp',
+    'billing',
+  ],
+  super_admin: [
+    'dashboard',
+    'drivers',
+    'rides',
+    'map',
+    'pricing',
+    'settings',
+    'whatsapp',
+    'billing',
+  ],
+  dispatcher: ['dashboard', 'rides', 'map'],
+  viewer: ['dashboard'],
+};
+
+function RoleRoute({ page, children }: { page: string; children: React.ReactNode }) {
+  const adminRole = useAuthStore((s) => s.user?.adminRole);
+  const allowed = ROLE_ACCESS[adminRole ?? ''] ?? [];
+  if (!allowed.includes(page)) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return <>{children}</>;
+}
+
 export default function App() {
   return (
     <Routes>
@@ -30,13 +65,62 @@ export default function App() {
       >
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<DashboardPage />} />
-        <Route path="drivers" element={<DriversPage />} />
-        <Route path="rides" element={<RidesPage />} />
-        <Route path="map" element={<MapPage />} />
-        <Route path="pricing" element={<PricingPage />} />
-        <Route path="settings" element={<CompanySettingsPage />} />
-        <Route path="whatsapp" element={<WhatsAppPage />} />
-        <Route path="billing" element={<BillingPage />} />
+        <Route
+          path="drivers"
+          element={
+            <RoleRoute page="drivers">
+              <DriversPage />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="rides"
+          element={
+            <RoleRoute page="rides">
+              <RidesPage />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="map"
+          element={
+            <RoleRoute page="map">
+              <MapPage />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="pricing"
+          element={
+            <RoleRoute page="pricing">
+              <PricingPage />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="settings"
+          element={
+            <RoleRoute page="settings">
+              <CompanySettingsPage />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="whatsapp"
+          element={
+            <RoleRoute page="whatsapp">
+              <WhatsAppPage />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="billing"
+          element={
+            <RoleRoute page="billing">
+              <BillingPage />
+            </RoleRoute>
+          }
+        />
       </Route>
     </Routes>
   );

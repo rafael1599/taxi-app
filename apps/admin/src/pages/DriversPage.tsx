@@ -31,10 +31,16 @@ const DRIVER_STATUS_COLORS: Record<string, string> = {
 export default function DriversPage() {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   async function fetchDrivers() {
-    const { data } = await api.get('/admin/drivers');
-    setDrivers(data);
+    try {
+      const { data } = await api.get('/admin/drivers');
+      setDrivers(data);
+      setError('');
+    } catch {
+      setError('Failed to load drivers. Please try again.');
+    }
     setLoading(false);
   }
 
@@ -43,8 +49,12 @@ export default function DriversPage() {
   }, []);
 
   async function toggleStatus(id: string, isActive: boolean) {
-    await api.patch(`/admin/drivers/${id}`, { isActive });
-    setDrivers((prev) => prev.map((d) => (d.id === id ? { ...d, isActive } : d)));
+    try {
+      await api.patch(`/admin/drivers/${id}`, { isActive });
+      setDrivers((prev) => prev.map((d) => (d.id === id ? { ...d, isActive } : d)));
+    } catch {
+      setError('Failed to update driver status.');
+    }
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -124,6 +134,7 @@ export default function DriversPage() {
   return (
     <div>
       <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 24 }}>Drivers</h1>
+      {error && <p style={{ color: '#ef4444', marginBottom: 12 }}>{error}</p>}
 
       <div style={s.summary}>
         <div style={s.statCard('#2563eb')}>

@@ -11,7 +11,14 @@ interface Stats {
 
 function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
   const s: Record<string, React.CSSProperties> = {
-    card: { background: '#fff', borderRadius: 12, padding: 24, flex: 1, borderTop: `4px solid ${color}`, boxShadow: '0 1px 8px rgba(0,0,0,.06)' },
+    card: {
+      background: '#fff',
+      borderRadius: 12,
+      padding: 24,
+      flex: 1,
+      borderTop: `4px solid ${color}`,
+      boxShadow: '0 1px 8px rgba(0,0,0,.06)',
+    },
     val: { fontSize: 36, fontWeight: 700, color },
     lbl: { fontSize: 13, color: '#64748b', marginTop: 4 },
   };
@@ -25,14 +32,19 @@ function StatCard({ label, value, color }: { label: string; value: number; color
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    api.get('/admin/dashboard').then((r) => setStats(r.data));
+    api
+      .get('/admin/dashboard')
+      .then((r) => setStats(r.data))
+      .catch(() => setError('Failed to load dashboard data. Please try again.'));
   }, []);
 
   return (
     <div>
       <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 24 }}>Dashboard</h1>
+      {error && <p style={{ color: '#ef4444', marginBottom: 12 }}>{error}</p>}
       {stats ? (
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
           <StatCard label="Total Drivers" value={stats.totalDrivers} color="#2563eb" />
@@ -41,9 +53,9 @@ export default function DashboardPage() {
           <StatCard label="Total Rides" value={stats.totalRides} color="#0891b2" />
           <StatCard label="Pending Rides" value={stats.pendingRides} color="#ea580c" />
         </div>
-      ) : (
+      ) : !error ? (
         <p style={{ color: '#64748b' }}>Loading\u2026</p>
-      )}
+      ) : null}
     </div>
   );
 }

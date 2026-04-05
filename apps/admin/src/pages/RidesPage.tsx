@@ -56,12 +56,18 @@ export default function RidesPage() {
   const [loading, setLoading] = useState(true);
   const [dispatchRide, setDispatchRide] = useState<string | null>(null);
   const [selectedDriver, setSelectedDriver] = useState('');
+  const [error, setError] = useState('');
 
   async function fetchRides(status: string) {
     setLoading(true);
-    const params = status ? { status } : {};
-    const { data } = await api.get('/admin/rides', { params });
-    setRides(data);
+    try {
+      const params = status ? { status } : {};
+      const { data } = await api.get('/admin/rides', { params });
+      setRides(data);
+      setError('');
+    } catch {
+      setError('Failed to load rides.');
+    }
     setLoading(false);
   }
 
@@ -69,15 +75,20 @@ export default function RidesPage() {
     fetchRides(statusFilter);
     api
       .get('/admin/drivers')
-      .then((r) => setDrivers(r.data.filter((d: { isActive: boolean }) => d.isActive)));
+      .then((r) => setDrivers(r.data.filter((d: { isActive: boolean }) => d.isActive)))
+      .catch(() => setError('Failed to load drivers list.'));
   }, [statusFilter]);
 
   async function handleDispatch() {
     if (!dispatchRide || !selectedDriver) return;
-    await api.post(`/admin/rides/${dispatchRide}/dispatch`, { driverId: selectedDriver });
-    setDispatchRide(null);
-    setSelectedDriver('');
-    fetchRides(statusFilter);
+    try {
+      await api.post(`/admin/rides/${dispatchRide}/dispatch`, { driverId: selectedDriver });
+      setDispatchRide(null);
+      setSelectedDriver('');
+      fetchRides(statusFilter);
+    } catch {
+      setError('Failed to dispatch ride.');
+    }
   }
 
   async function handleCancel(rideId: string) {
@@ -85,7 +96,7 @@ export default function RidesPage() {
       await api.post(`/rides/${rideId}/cancel`);
       fetchRides(statusFilter);
     } catch {
-      /* ignore */
+      setError('Failed to cancel ride.');
     }
   }
 
@@ -179,6 +190,7 @@ export default function RidesPage() {
   return (
     <div>
       <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 24 }}>Rides</h1>
+      {error && <p style={{ color: '#ef4444', marginBottom: 12 }}>{error}</p>}
 
       <div style={s.summary}>
         <div style={s.statCard('#2563eb')}>

@@ -4,15 +4,40 @@ import { useAuthStore } from '../store/authStore';
 import { api } from '../api/client';
 
 const navItems = [
-  { to: '/dashboard', label: 'Dashboard' },
-  { to: '/map', label: 'Live Map' },
-  { to: '/drivers', label: 'Drivers' },
-  { to: '/rides', label: 'Rides' },
-  { to: '/pricing', label: 'Pricing' },
-  { to: '/billing', label: 'Billing' },
-  { to: '/settings', label: 'Company' },
-  { to: '/whatsapp', label: 'WhatsApp' },
+  { to: '/dashboard', label: 'Dashboard', page: 'dashboard' },
+  { to: '/map', label: 'Live Map', page: 'map' },
+  { to: '/drivers', label: 'Drivers', page: 'drivers' },
+  { to: '/rides', label: 'Rides', page: 'rides' },
+  { to: '/pricing', label: 'Pricing', page: 'pricing' },
+  { to: '/billing', label: 'Billing', page: 'billing' },
+  { to: '/settings', label: 'Company', page: 'settings' },
+  { to: '/whatsapp', label: 'WhatsApp', page: 'whatsapp' },
 ];
+
+const ROLE_ACCESS: Record<string, string[]> = {
+  platform_admin: [
+    'dashboard',
+    'drivers',
+    'rides',
+    'map',
+    'pricing',
+    'settings',
+    'whatsapp',
+    'billing',
+  ],
+  super_admin: [
+    'dashboard',
+    'drivers',
+    'rides',
+    'map',
+    'pricing',
+    'settings',
+    'whatsapp',
+    'billing',
+  ],
+  dispatcher: ['dashboard', 'rides', 'map'],
+  viewer: ['dashboard'],
+};
 
 const s: Record<string, React.CSSProperties> = {
   shell: { display: 'flex', minHeight: '100vh' },
@@ -130,27 +155,38 @@ export default function Layout() {
         )}
 
         <nav style={s.nav}>
-          <div style={s.sectionLabel}>Operations</div>
-          {navItems.slice(0, 4).map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              style={({ isActive }) => ({ ...s.link, ...(isActive ? s.activeLink : {}) })}
-            >
-              {item.label}
-            </NavLink>
-          ))}
+          {(() => {
+            const allowed = ROLE_ACCESS[user?.adminRole ?? ''] ?? [];
+            const visibleOps = navItems.slice(0, 4).filter((i) => allowed.includes(i.page));
+            const visibleConfig = navItems.slice(4).filter((i) => allowed.includes(i.page));
+            return (
+              <>
+                {visibleOps.length > 0 && <div style={s.sectionLabel}>Operations</div>}
+                {visibleOps.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    style={({ isActive }) => ({ ...s.link, ...(isActive ? s.activeLink : {}) })}
+                  >
+                    {item.label}
+                  </NavLink>
+                ))}
 
-          <div style={{ ...s.sectionLabel, marginTop: 12 }}>Configuration</div>
-          {navItems.slice(4).map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              style={({ isActive }) => ({ ...s.link, ...(isActive ? s.activeLink : {}) })}
-            >
-              {item.label}
-            </NavLink>
-          ))}
+                {visibleConfig.length > 0 && (
+                  <div style={{ ...s.sectionLabel, marginTop: 12 }}>Configuration</div>
+                )}
+                {visibleConfig.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    style={({ isActive }) => ({ ...s.link, ...(isActive ? s.activeLink : {}) })}
+                  >
+                    {item.label}
+                  </NavLink>
+                ))}
+              </>
+            );
+          })()}
         </nav>
 
         <div style={s.footer}>

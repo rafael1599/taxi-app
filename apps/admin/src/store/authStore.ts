@@ -1,5 +1,14 @@
 import { create } from 'zustand';
 
+function isTokenExpired(token: string): boolean {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.exp * 1000 < Date.now();
+  } catch {
+    return true;
+  }
+}
+
 interface AdminUser {
   adminId: string;
   fullName: string;
@@ -33,6 +42,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const token = localStorage.getItem('admin_token');
     const info = localStorage.getItem('admin_info');
     if (token && info) {
+      if (isTokenExpired(token)) {
+        localStorage.removeItem('admin_token');
+        localStorage.removeItem('admin_info');
+        localStorage.removeItem('selected_company_id');
+        return null;
+      }
       try {
         return { ...JSON.parse(info), token };
       } catch {

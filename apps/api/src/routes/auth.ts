@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { db, schema } from '@rockland-taxi/db';
 import { eq } from 'drizzle-orm';
 import { JWT_EXPIRY_SEC } from '@rockland-taxi/shared';
+import bcrypt from 'bcryptjs';
 
 const driverLoginSchema = z.object({
   email: z.string().email(),
@@ -32,9 +33,13 @@ const riderRegisterSchema = z.object({
   companyId: z.string().uuid(),
 });
 
+const authRateLimit = {
+  config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
+};
+
 export async function authRoutes(app: FastifyInstance) {
   // Driver register
-  app.post('/auth/driver/register', async (request, reply) => {
+  app.post('/auth/driver/register', { ...authRateLimit }, async (request, reply) => {
     const body = driverRegisterSchema.parse(request.body);
     const hash = await hashPassword(body.password);
 
@@ -59,7 +64,7 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   // Driver login
-  app.post('/auth/driver/login', async (request, reply) => {
+  app.post('/auth/driver/login', { ...authRateLimit }, async (request, reply) => {
     const body = driverLoginSchema.parse(request.body);
 
     const driver = await db.query.drivers.findFirst({
@@ -67,6 +72,15 @@ export async function authRoutes(app: FastifyInstance) {
     });
     if (!driver || !(await verifyPassword(body.password, driver.passwordHash))) {
       return reply.code(401).send({ error: 'Invalid credentials' });
+    }
+
+    // Migrate legacy SHA-256 hash to bcrypt on successful login
+    if (isSha256Hash(driver.passwordHash)) {
+      const newHash = await hashPassword(body.password);
+      await db
+        .update(schema.drivers)
+        .set({ passwordHash: newHash })
+        .where(eq(schema.drivers.id, driver.id));
     }
 
     const token = app.jwt.sign(
@@ -77,7 +91,7 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   // Rider register
-  app.post('/auth/rider/register', async (request, reply) => {
+  app.post('/auth/rider/register', { ...authRateLimit }, async (request, reply) => {
     const body = riderRegisterSchema.parse(request.body);
     const hash = await hashPassword(body.password);
 
@@ -104,7 +118,7 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   // Rider login
-  app.post('/auth/rider/login', async (request, reply) => {
+  app.post('/auth/rider/login', { ...authRateLimit }, async (request, reply) => {
     const body = riderLoginSchema.parse(request.body);
 
     const rider = await db.query.riders.findFirst({
@@ -121,6 +135,15 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(401).send({ error: 'Invalid credentials' });
     }
 
+    // Migrate legacy SHA-256 hash to bcrypt on successful login
+    if (isSha256Hash(auth.passwordHash)) {
+      const newHash = await hashPassword(body.password);
+      await db
+        .update(schema.ridersAuth)
+        .set({ passwordHash: newHash })
+        .where(eq(schema.ridersAuth.id, auth.id));
+    }
+
     const token = app.jwt.sign(
       { sub: rider.id, role: 'rider', companyId: rider.companyId },
       { expiresIn: JWT_EXPIRY_SEC },
@@ -129,14 +152,26 @@ export async function authRoutes(app: FastifyInstance) {
   });
 }
 
+const BCRYPT_ROUNDS = 12;
+
 async function hashPassword(password: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password + process.env.JWT_SECRET);
-  const hash = await crypto.subtle.digest('SHA-256', data);
-  return Buffer.from(hash).toString('hex');
+  return bcrypt.hash(password, BCRYPT_ROUNDS);
 }
 
-async function verifyPassword(password: string, hash: string): Promise<boolean> {
-  const computed = await hashPassword(password);
-  return computed === hash;
+function isSha256Hash(hash: string): boolean {
+  return /^[a-f0-9]{64}$/.test(hash);
+}
+
+async function legacySha256(password: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password + process.env.JWT_SECRET);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return Buffer.from(digest).toString('hex');
+}
+
+async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
+  if (isSha256Hash(storedHash)) {
+    return (await legacySha256(password)) === storedHash;
+  }
+  return bcrypt.compare(password, storedHash);
 }

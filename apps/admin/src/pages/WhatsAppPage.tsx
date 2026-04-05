@@ -15,6 +15,7 @@ export default function WhatsAppPage() {
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
+  const [error, setError] = useState('');
   const pollRef = useRef<ReturnType<typeof setInterval>>();
   const companyId = getEffectiveCompanyId();
 
@@ -39,25 +40,34 @@ export default function WhatsAppPage() {
   async function handleStart() {
     if (!companyId) return;
     setStarting(true);
+    setError('');
     try {
       await api.post('/whatsapp/sessions', { companyId });
       await fetchStatus();
     } catch {
-      /* ignore */
+      setError('Failed to start WhatsApp session.');
     }
     setStarting(false);
   }
 
   async function handleStop() {
     if (!companyId) return;
-    await api.delete(`/whatsapp/sessions/${companyId}`);
-    await fetchStatus();
+    try {
+      await api.delete(`/whatsapp/sessions/${companyId}`);
+      await fetchStatus();
+    } catch {
+      setError('Failed to stop WhatsApp session.');
+    }
   }
 
   async function handleLogout() {
     if (!companyId) return;
-    await api.post(`/whatsapp/sessions/${companyId}/logout`);
-    await fetchStatus();
+    try {
+      await api.post(`/whatsapp/sessions/${companyId}/logout`);
+      await fetchStatus();
+    } catch {
+      setError('Failed to logout WhatsApp session.');
+    }
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -126,6 +136,7 @@ export default function WhatsAppPage() {
   return (
     <div>
       <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 24 }}>WhatsApp Integration</h1>
+      {error && <p style={{ color: '#ef4444', marginBottom: 12 }}>{error}</p>}
 
       <div style={s.card}>
         <div
