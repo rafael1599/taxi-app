@@ -14,6 +14,7 @@ import { locationWsRoutes } from './ws/locationHandler.js';
 import { adminAuthRoutes } from './routes/adminAuth.js';
 import { adminRoutes } from './routes/admin.js';
 import { companyRoutes } from './routes/companies.js';
+import { pricingRoutes } from './routes/pricing.js';
 import { initSentry } from './plugins/sentry.js';
 
 initSentry(process.env.npm_package_version);
@@ -52,6 +53,7 @@ export async function buildApp() {
   await app.register(adminAuthRoutes, { prefix: '/api/v1' });
   await app.register(adminRoutes, { prefix: '/api/v1' });
   await app.register(companyRoutes, { prefix: '/api/v1' });
+  await app.register(pricingRoutes, { prefix: '/api/v1' });
 
   return app;
 }

@@ -203,6 +203,66 @@ export const payments = pgTable(
   ],
 );
 
+// ── Pricing Engine ──────────────────────────────────────────────────────────
+
+export const pricingRules = pgTable('pricing_rules', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  companyId: uuid('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' })
+    .unique(),
+  baseRatePerMile: numeric('base_rate_per_mile', { precision: 8, scale: 2 })
+    .notNull()
+    .default('3.00'),
+  minimumFare: numeric('minimum_fare', { precision: 8, scale: 2 }).notNull().default('7.00'),
+  perMinuteRate: numeric('per_minute_rate', { precision: 8, scale: 2 }).notNull().default('0.20'),
+  currency: char('currency', { length: 3 }).notNull().default('USD'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const zoneMinimums = pgTable(
+  'zone_minimums',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    companyId: uuid('company_id')
+      .notNull()
+      .references(() => companies.id, { onDelete: 'cascade' }),
+    zoneName: text('zone_name').notNull(),
+    minimumFare: numeric('minimum_fare', { precision: 8, scale: 2 }).notNull(),
+    // PostGIS polygon — managed via raw SQL; typed as text for Drizzle compat
+    boundaryPolygon: text('boundary_polygon'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => [index('zone_minimums_company_id_idx').on(t.companyId)],
+);
+
+export const fixedRoutes = pgTable(
+  'fixed_routes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    companyId: uuid('company_id')
+      .notNull()
+      .references(() => companies.id, { onDelete: 'cascade' }),
+    name: text('name'),
+    originLat: doublePrecision('origin_lat').notNull(),
+    originLng: doublePrecision('origin_lng').notNull(),
+    destLat: doublePrecision('dest_lat').notNull(),
+    destLng: doublePrecision('dest_lng').notNull(),
+    // PostGIS geography columns — managed via trigger in SQL migration
+    originGeog: text('origin_geog'),
+    destGeog: text('dest_geog'),
+    radiusMeters: integer('radius_meters').notNull().default(500),
+    fixedPrice: numeric('fixed_price', { precision: 8, scale: 2 }).notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => [index('fixed_routes_company_id_idx').on(t.companyId)],
+);
+
+// ── Admins ──────────────────────────────────────────────────────────────────
+
 export const admins = pgTable('admins', {
   id: uuid('id').primaryKey().defaultRandom(),
   companyId: uuid('company_id').references(() => companies.id),
