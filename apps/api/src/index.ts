@@ -4,6 +4,8 @@ import fastifyHelmet from '@fastify/helmet';
 import fastifyJwt from '@fastify/jwt';
 import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyWebsocket from '@fastify/websocket';
+import fastifySwagger from '@fastify/swagger';
+import fastifySwaggerUi from '@fastify/swagger-ui';
 
 import { sql } from 'drizzle-orm';
 import { getRedis, closeRedis } from './services/redis.js';
@@ -55,6 +57,43 @@ export async function buildApp() {
   });
   await app.register(fastifyJwt, { secret: JWT_SECRET });
   await app.register(fastifyWebsocket);
+
+  // ── API Documentation ────────────────────────────────────────────────────
+  await app.register(fastifySwagger, {
+    openapi: {
+      info: {
+        title: 'Rockland Taxi API',
+        description: 'Multi-tenant taxi dispatch platform API',
+        version: process.env.npm_package_version ?? '0.1.0',
+      },
+      servers: [{ url: '/api/v1', description: 'API v1' }],
+      components: {
+        securitySchemes: {
+          bearerAuth: {
+            type: 'http',
+            scheme: 'bearer',
+            bearerFormat: 'JWT',
+          },
+        },
+      },
+      security: [{ bearerAuth: [] }],
+      tags: [
+        { name: 'Auth', description: 'Authentication endpoints' },
+        { name: 'Rides', description: 'Ride lifecycle management' },
+        { name: 'Drivers', description: 'Driver management and location' },
+        { name: 'Riders', description: 'Rider management' },
+        { name: 'Pricing', description: 'Price calculation and rules' },
+        { name: 'Companies', description: 'Company/tenant management' },
+        { name: 'Billing', description: 'Stripe billing and commissions' },
+        { name: 'Admin', description: 'Admin operations' },
+        { name: 'Ratings', description: 'Ride ratings' },
+      ],
+    },
+  });
+  await app.register(fastifySwaggerUi, {
+    routePrefix: '/docs',
+    uiConfig: { docExpansion: 'list', deepLinking: true },
+  });
 
   // ── Error handler ─────────────────────────────────────────────────────────
   app.setErrorHandler(errorHandler);

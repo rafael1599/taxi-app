@@ -18,11 +18,20 @@ export interface PriceQuoteResult {
   price: number;
   distance: { km: number; miles: number };
   durationMin: number;
+  etaRange: { minMin: number; maxMin: number; display: string };
   method: 'fixed_route' | 'zone_minimum' | 'base_rate';
   distanceSource: string;
   currency: string;
   fixedRouteId?: string;
   zoneId?: string;
+}
+
+const ETA_VARIANCE = 0.3; // ±30% for ETA range
+
+function buildEtaRange(durationMin: number): PriceQuoteResult['etaRange'] {
+  const minMin = Math.max(1, Math.floor(durationMin * (1 - ETA_VARIANCE)));
+  const maxMin = Math.ceil(durationMin * (1 + ETA_VARIANCE));
+  return { minMin, maxMin, display: `${minMin}-${maxMin} min` };
 }
 
 // ── Distance calculation ────────────────────────────────────────────────────
@@ -262,6 +271,7 @@ export async function calculatePriceQuote(input: PriceQuoteInput): Promise<Price
       price: fixedMatch.fixedPrice,
       distance: { km: dist.km, miles: dist.miles },
       durationMin: dist.durationMin,
+      etaRange: buildEtaRange(dist.durationMin),
       method: 'fixed_route',
       distanceSource: dist.source,
       currency: rules.currency,
@@ -293,6 +303,7 @@ export async function calculatePriceQuote(input: PriceQuoteInput): Promise<Price
     price: finalPrice,
     distance: { km: Math.round(dist.km * 100) / 100, miles: Math.round(dist.miles * 100) / 100 },
     durationMin: dist.durationMin,
+    etaRange: buildEtaRange(dist.durationMin),
     method,
     distanceSource: dist.source,
     currency: rules.currency,
