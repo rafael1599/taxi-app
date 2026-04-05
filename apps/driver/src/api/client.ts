@@ -5,8 +5,10 @@ import { useAuthStore } from '../store/authStore';
 const BASE_URL =
   (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined) ?? 'http://localhost:3000';
 
+export const API_BASE_URL = BASE_URL;
+
 export const apiClient = axios.create({
-  baseURL: BASE_URL,
+  baseURL: `${BASE_URL}/api/v1`,
   timeout: 10_000,
   headers: { 'Content-Type': 'application/json' },
 });
@@ -34,20 +36,21 @@ export interface RegisterBody {
   password: string;
   licenseNumber: string;
   tlcLicense?: string;
+  companyId: string;
 }
 
 export const authApi = {
   login: (email: string, password: string) =>
     apiClient.post<LoginResponse>('/auth/driver/login', { email, password }),
 
-  register: (body: RegisterBody) =>
-    apiClient.post<LoginResponse>('/auth/driver/register', body),
+  register: (body: RegisterBody) => apiClient.post<LoginResponse>('/auth/driver/register', body),
 };
 
 // ── Drivers ──────────────────────────────────────────────────────────────────
 
 export interface DriverProfile {
   id: string;
+  companyId: string;
   fullName: string;
   phone: string;
   email: string;
@@ -55,6 +58,7 @@ export interface DriverProfile {
   tlcLicense: string | null;
   isActive: boolean;
   isAvailable: boolean;
+  status: string;
   currentLat: number | null;
   currentLng: number | null;
 }
@@ -62,20 +66,35 @@ export interface DriverProfile {
 export const driverApi = {
   me: () => apiClient.get<DriverProfile>('/drivers/me'),
 
-  setAvailability: (isAvailable: boolean) =>
-    apiClient.patch('/drivers/me/availability', { isAvailable }),
+  goOnline: () => apiClient.post('/drivers/online'),
 
-  updateLocation: (lat: number, lng: number) =>
-    apiClient.patch('/drivers/me/location', { lat, lng }),
+  goOffline: () => apiClient.post('/drivers/offline'),
+
+  updateLocation: (lat: number, lng: number) => apiClient.post('/drivers/location', { lat, lng }),
+};
+
+// ── Trip Offers ─────────────────────────────────────────────────────────────
+
+export const tripApi = {
+  acceptOffer: (offerId: string) => apiClient.post(`/trips/offers/${offerId}/accept`),
+
+  rejectOffer: (offerId: string) => apiClient.post(`/trips/offers/${offerId}/reject`),
+
+  updateStatus: (rideId: string, status: string) =>
+    apiClient.post(`/rides/${rideId}/status`, { status }),
 };
 
 // ── Rides ────────────────────────────────────────────────────────────────────
 
 export type RideStatus =
   | 'requested'
+  | 'searching_driver'
+  | 'driver_assigned'
   | 'accepted'
+  | 'en_route'
   | 'arrived'
   | 'in_progress'
+  | 'picked_up'
   | 'completed'
   | 'cancelled';
 
@@ -106,12 +125,11 @@ export const rideApi = {
 
   get: (id: string) => apiClient.get<Ride>(`/rides/${id}`),
 
-  accept: (id: string) => apiClient.post<Ride>(`/rides/${id}/accept`),
-
-  start: (id: string) => apiClient.post<Ride>(`/rides/${id}/start`),
-
-  complete: (id: string) => apiClient.post<Ride>(`/rides/${id}/complete`),
-
-  cancel: (id: string, reason?: string) =>
-    apiClient.post<Ride>(`/rides/${id}/cancel`, { reason }),
+  cancel: (id: string, reason?: string) => apiClient.post<Ride>(`/rides/${id}/cancel`, { reason }),
 };
+
+// ── SSE URL helper ──────────────────────────────────────────────────────────
+
+export function getSSEUrl(): string {
+  return `${BASE_URL}/api/v1/drivers/events`;
+}

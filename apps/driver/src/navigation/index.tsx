@@ -35,7 +35,7 @@ function TabNavigator() {
         component={HomeScreen}
         options={{
           tabBarLabel: 'Rides',
-          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>🚖</Text>,
+          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>R</Text>,
         }}
       />
       <Tab.Screen
@@ -43,7 +43,7 @@ function TabNavigator() {
         component={EarningsScreen}
         options={{
           tabBarLabel: 'Earnings',
-          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>💰</Text>,
+          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>$</Text>,
         }}
       />
     </Tab.Navigator>
@@ -56,7 +56,7 @@ export type RootStackParamList = {
   Login: undefined;
   Register: undefined;
   Tabs: undefined;
-  RideRequest: { rideId: string };
+  RideRequest: { offerId: string };
   ActiveRide: { rideId: string };
 };
 

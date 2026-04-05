@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,12 +6,12 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Vibration,
 } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../navigation';
-import { rideApi, type Ride } from '../api/client';
+import { tripApi, rideApi } from '../api/client';
 import { useRideStore } from '../store/rideStore';
 
 type Props = {
@@ -20,41 +20,97 @@ type Props = {
 };
 
 export function RideRequestScreen({ navigation, route }: Props) {
-  const { rideId } = route.params;
-  const [ride, setRide] = useState<Ride | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [accepting, setAccepting] = useState(false);
+  const { offerId } = route.params;
+  const currentOffer = useRideStore((s) => s.currentOffer);
+  const setCurrentOffer = useRideStore((s) => s.setCurrentOffer);
   const setActiveRide = useRideStore((s) => s.setActiveRide);
+  const [secondsLeft, setSecondsLeft] = useState(60);
+  const [accepting, setAccepting] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Find the offer data
+  const offer = currentOffer?.offerId === offerId ? currentOffer : null;
+
+  // Calculate initial seconds from expiresAt
+  useEffect(() => {
+    if (!offer) return;
+    const expiresAt = new Date(offer.expiresAt).getTime();
+    const now = Date.now();
+    const remaining = Math.max(0, Math.floor((expiresAt - now) / 1000));
+    setSecondsLeft(remaining);
+  }, [offer]);
+
+  // Vibrate on mount to alert driver
+  useEffect(() => {
+    Vibration.vibrate([0, 500, 200, 500]);
+  }, []);
+
+  // Countdown timer
+  useEffect(() => {
+    timerRef.current = setInterval(() => {
+      setSecondsLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current!);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, []);
+
+  // Auto-dismiss when timer expires or offer is cleared
+  useEffect(() => {
+    if (secondsLeft === 0) {
+      setCurrentOffer(null);
+      navigation.goBack();
+    }
+  }, [secondsLeft, setCurrentOffer, navigation]);
 
   useEffect(() => {
-    rideApi
-      .get(rideId)
-      .then(({ data }) => setRide(data))
-      .catch(() => {
-        Alert.alert('Error', 'Could not load ride.');
-        navigation.goBack();
-      })
-      .finally(() => setLoading(false));
-  }, [rideId, navigation]);
+    if (!currentOffer) {
+      navigation.goBack();
+    }
+  }, [currentOffer, navigation]);
 
-  const handleAccept = async () => {
-    if (!ride) return;
+  const handleAccept = useCallback(async () => {
+    if (!offer) return;
     setAccepting(true);
     try {
-      const { data } = await rideApi.accept(ride.id);
+      await tripApi.acceptOffer(offer.offerId);
+      setCurrentOffer(null);
+      // Active ride will be set via SSE trip_confirmed event
+      // But also fetch it directly as a fallback
+      const { data } = await rideApi.get(offer.rideId);
       setActiveRide(data);
-      navigation.replace('ActiveRide', { rideId: data.id });
+      navigation.replace('ActiveRide', { rideId: offer.rideId });
     } catch {
-      Alert.alert('Unavailable', 'This ride was already taken.');
+      Alert.alert('Unavailable', 'This offer is no longer available.');
+      setCurrentOffer(null);
       navigation.goBack();
     } finally {
       setAccepting(false);
     }
-  };
+  }, [offer, setCurrentOffer, setActiveRide, navigation]);
 
-  const handleDecline = () => navigation.goBack();
+  const handleReject = useCallback(async () => {
+    if (!offer) return;
+    setRejecting(true);
+    try {
+      await tripApi.rejectOffer(offer.offerId);
+    } catch {
+      // already expired or rejected, that's fine
+    }
+    setCurrentOffer(null);
+    setRejecting(false);
+    navigation.goBack();
+  }, [offer, setCurrentOffer, navigation]);
 
-  if (loading) {
+  if (!offer) {
     return (
       <View style={styles.center}>
         <ActivityIndicator color="#f5c518" size="large" />
@@ -62,54 +118,80 @@ export function RideRequestScreen({ navigation, route }: Props) {
     );
   }
 
-  if (!ride) return null;
-
-  const pickupRegion = {
-    latitude: ride.pickupLat,
-    longitude: ride.pickupLng,
-    latitudeDelta: 0.04,
-    longitudeDelta: 0.04,
-  };
+  const progress = secondsLeft / 60;
+  const urgentColor = secondsLeft <= 15 ? '#ff4444' : '#f5c518';
 
   return (
     <View style={styles.container}>
-      <MapView style={styles.map} provider={PROVIDER_GOOGLE} initialRegion={pickupRegion}>
-        <Marker coordinate={{ latitude: ride.pickupLat, longitude: ride.pickupLng }} title="Pickup" pinColor="green" />
-        <Marker coordinate={{ latitude: ride.dropoffLat, longitude: ride.dropoffLng }} title="Drop-off" pinColor="red" />
-      </MapView>
-
-      <View style={styles.sheet}>
-        <Text style={styles.label}>New Ride Request</Text>
-
-        <View style={styles.row}>
-          <Text style={styles.icon}>📍</Text>
-          <Text style={styles.address}>{ride.pickupAddress}</Text>
+      {/* Countdown timer */}
+      <View style={styles.timerContainer}>
+        <View style={[styles.timerRing, { borderColor: urgentColor }]}>
+          <Text style={[styles.timerText, { color: urgentColor }]}>{secondsLeft}</Text>
+          <Text style={styles.timerLabel}>sec</Text>
         </View>
+      </View>
+
+      {/* Ride info */}
+      <View style={styles.sheet}>
+        <Text style={styles.label}>New Trip Request</Text>
+
         <View style={styles.row}>
-          <Text style={styles.icon}>🏁</Text>
-          <Text style={styles.address}>{ride.dropoffAddress}</Text>
+          <View style={[styles.dot, { backgroundColor: '#4caf50' }]} />
+          <View style={styles.addressContainer}>
+            <Text style={styles.addressLabel}>PICKUP</Text>
+            <Text style={styles.address}>{offer.pickupAddress}</Text>
+          </View>
+        </View>
+
+        <View style={styles.connector} />
+
+        <View style={styles.row}>
+          <View style={[styles.dot, { backgroundColor: '#ff4444' }]} />
+          <View style={styles.addressContainer}>
+            <Text style={styles.addressLabel}>DROP-OFF</Text>
+            <Text style={styles.address}>{offer.dropoffAddress}</Text>
+          </View>
         </View>
 
         <View style={styles.stats}>
           <View style={styles.stat}>
-            <Text style={styles.statValue}>${ride.fareEstimate}</Text>
+            <Text style={styles.statValue}>${offer.fareEstimate ?? '—'}</Text>
             <Text style={styles.statLabel}>Fare</Text>
           </View>
+          <View style={styles.statDivider} />
           <View style={styles.stat}>
-            <Text style={styles.statValue}>{ride.distanceKm?.toFixed(1)} km</Text>
+            <Text style={styles.statValue}>{offer.distanceKm?.toFixed(1) ?? '—'} km</Text>
             <Text style={styles.statLabel}>Distance</Text>
-          </View>
-          <View style={styles.stat}>
-            <Text style={styles.statValue}>{ride.durationMin} min</Text>
-            <Text style={styles.statLabel}>Est. time</Text>
           </View>
         </View>
 
+        {/* Progress bar */}
+        <View style={styles.progressBar}>
+          <View
+            style={[
+              styles.progressFill,
+              { width: `${progress * 100}%`, backgroundColor: urgentColor },
+            ]}
+          />
+        </View>
+
         <View style={styles.actions}>
-          <TouchableOpacity style={styles.declineBtn} onPress={handleDecline}>
-            <Text style={styles.declineText}>Decline</Text>
+          <TouchableOpacity
+            style={styles.declineBtn}
+            onPress={handleReject}
+            disabled={rejecting || accepting}
+          >
+            {rejecting ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.declineText}>Decline</Text>
+            )}
           </TouchableOpacity>
-          <TouchableOpacity style={styles.acceptBtn} onPress={handleAccept} disabled={accepting}>
+          <TouchableOpacity
+            style={[styles.acceptBtn, { backgroundColor: urgentColor }]}
+            onPress={handleAccept}
+            disabled={accepting || rejecting}
+          >
             {accepting ? (
               <ActivityIndicator color="#1a1a2e" />
             ) : (
@@ -124,23 +206,81 @@ export function RideRequestScreen({ navigation, route }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#1a1a2e' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1a1a2e' },
-  map: { flex: 1 },
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#1a1a2e',
+  },
+  timerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  timerRing: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    borderWidth: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#2a2a42',
+  },
+  timerText: { fontSize: 48, fontWeight: '700' },
+  timerLabel: { fontSize: 14, color: '#888', marginTop: -4 },
   sheet: {
     backgroundColor: '#2a2a42',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
-    paddingBottom: 36,
+    paddingBottom: 40,
   },
-  label: { color: '#f5c518', fontWeight: '700', fontSize: 18, marginBottom: 16 },
-  row: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  icon: { fontSize: 18, marginRight: 10 },
-  address: { color: '#fff', fontSize: 14, flex: 1 },
-  stats: { flexDirection: 'row', justifyContent: 'space-around', marginVertical: 20 },
-  stat: { alignItems: 'center' },
-  statValue: { color: '#fff', fontWeight: '700', fontSize: 20 },
+  label: { color: '#f5c518', fontWeight: '700', fontSize: 18, marginBottom: 20 },
+  row: { flexDirection: 'row', alignItems: 'flex-start' },
+  dot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginTop: 4,
+    marginRight: 12,
+  },
+  connector: {
+    width: 2,
+    height: 20,
+    backgroundColor: '#3a3a52',
+    marginLeft: 5,
+    marginVertical: 4,
+  },
+  addressContainer: { flex: 1, marginBottom: 4 },
+  addressLabel: {
+    fontSize: 10,
+    color: '#888',
+    fontWeight: '600',
+    letterSpacing: 1,
+    marginBottom: 2,
+  },
+  address: { color: '#fff', fontSize: 14 },
+  stats: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginVertical: 20,
+    backgroundColor: '#1a1a2e',
+    borderRadius: 12,
+    padding: 16,
+  },
+  stat: { flex: 1, alignItems: 'center' },
+  statValue: { color: '#fff', fontWeight: '700', fontSize: 22 },
   statLabel: { color: '#888', fontSize: 12, marginTop: 4 },
+  statDivider: { width: 1, height: 36, backgroundColor: '#3a3a52' },
+  progressBar: {
+    height: 4,
+    backgroundColor: '#3a3a52',
+    borderRadius: 2,
+    marginBottom: 20,
+    overflow: 'hidden',
+  },
+  progressFill: { height: '100%', borderRadius: 2 },
   actions: { flexDirection: 'row', gap: 12 },
   declineBtn: {
     flex: 1,
@@ -152,7 +292,6 @@ const styles = StyleSheet.create({
   declineText: { color: '#fff', fontWeight: '600', fontSize: 16 },
   acceptBtn: {
     flex: 2,
-    backgroundColor: '#f5c518',
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',

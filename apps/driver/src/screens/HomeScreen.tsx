@@ -1,34 +1,35 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Switch,
-  FlatList,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import type { TabParamList } from '../navigation';
-import { driverApi, type DriverProfile } from '../api/client';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation';
+import { driverApi, rideApi, type DriverProfile } from '../api/client';
 import { useRideStore } from '../store/rideStore';
 import { useAuthStore } from '../store/authStore';
 import { useLocationTracking } from '../hooks/useLocationTracking';
-import { usePendingRides } from '../hooks/usePendingRides';
+import { useSSE } from '../hooks/useSSE';
 
-type Props = { navigation: BottomTabNavigationProp<TabParamList, 'Home'> };
-
-export function HomeScreen({ navigation }: Props) {
+export function HomeScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [profile, setProfile] = useState<DriverProfile | null>(null);
   const [online, setOnline] = useState(false);
   const [toggling, setToggling] = useState(false);
-  const pendingRides = useRideStore((s) => s.pendingRides);
+  const currentOffer = useRideStore((s) => s.currentOffer);
+  const activeRide = useRideStore((s) => s.activeRide);
   const clearAuth = useAuthStore((s) => s.clearAuth);
 
   useLocationTracking(online);
-  usePendingRides(online);
+  useSSE(online);
 
+  // Load profile on mount
   useEffect(() => {
     driverApi
       .me()
@@ -39,28 +40,64 @@ export function HomeScreen({ navigation }: Props) {
       .catch(() => Alert.alert('Error', 'Could not load profile.'));
   }, []);
 
-  const toggleOnline = async (value: boolean) => {
+  // Navigate to offer screen when a trip offer arrives
+  useEffect(() => {
+    if (currentOffer) {
+      navigation.navigate('RideRequest', { offerId: currentOffer.offerId });
+    }
+  }, [currentOffer, navigation]);
+
+  // Navigate to active ride when one is confirmed
+  useEffect(() => {
+    if (
+      activeRide &&
+      ['accepted', 'en_route', 'arrived', 'picked_up'].includes(activeRide.status)
+    ) {
+      navigation.navigate('ActiveRide', { rideId: activeRide.id });
+    }
+  }, [activeRide, navigation]);
+
+  // Check for existing active ride on mount
+  useEffect(() => {
+    rideApi
+      .list()
+      .then(({ data }) => {
+        const active = data.find((r) =>
+          ['accepted', 'en_route', 'arrived', 'picked_up'].includes(r.status),
+        );
+        if (active) {
+          useRideStore.getState().setActiveRide(active);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const toggleOnline = useCallback(async (value: boolean) => {
     setToggling(true);
     try {
-      await driverApi.setAvailability(value);
+      if (value) {
+        await driverApi.goOnline();
+      } else {
+        await driverApi.goOffline();
+      }
       setOnline(value);
     } catch {
-      Alert.alert('Error', 'Could not update availability.');
+      Alert.alert('Error', 'Could not update status.');
     } finally {
       setToggling(false);
     }
-  };
+  }, []);
+
+  const statusColor = online ? '#4caf50' : '#888';
 
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.greeting}>
-            Hi, {profile?.fullName?.split(' ')[0] ?? '…'}
-          </Text>
-          <Text style={[styles.status, online ? styles.statusOnline : styles.statusOffline]}>
-            {online ? '● Online' : '○ Offline'}
+          <Text style={styles.greeting}>Hi, {profile?.fullName?.split(' ')[0] ?? '...'}</Text>
+          <Text style={[styles.status, { color: statusColor }]}>
+            {online ? 'Online' : 'Offline'}
           </Text>
         </View>
         <View style={styles.headerRight}>
@@ -80,44 +117,28 @@ export function HomeScreen({ navigation }: Props) {
         </View>
       </View>
 
-      {/* Pending ride requests */}
-      {online ? (
-        <>
-          <Text style={styles.sectionTitle}>
-            Ride Requests {pendingRides.length > 0 ? `(${pendingRides.length})` : ''}
-          </Text>
-          {pendingRides.length === 0 ? (
-            <View style={styles.empty}>
-              <Text style={styles.emptyText}>Waiting for ride requests…</Text>
+      {/* Main content */}
+      <View style={styles.body}>
+        {online ? (
+          <View style={styles.waitingContainer}>
+            <View style={styles.pulseOuter}>
+              <View style={styles.pulseInner}>
+                <Text style={styles.carIcon}>{'<car>'}</Text>
+              </View>
             </View>
-          ) : (
-            <FlatList
-              data={pendingRides}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.rideCard}
-                  onPress={() =>
-                    navigation.navigate('RideRequest' as never, { rideId: item.id } as never)
-                  }
-                >
-                  <Text style={styles.rideAddress}>📍 {item.pickupAddress}</Text>
-                  <Text style={styles.rideDest}>🏁 {item.dropoffAddress}</Text>
-                  <View style={styles.rideFooter}>
-                    <Text style={styles.rideFare}>${item.fareEstimate}</Text>
-                    <Text style={styles.rideDist}>{item.distanceKm?.toFixed(1)} km</Text>
-                  </View>
-                </TouchableOpacity>
-              )}
-              contentContainerStyle={{ paddingBottom: 20 }}
-            />
-          )}
-        </>
-      ) : (
-        <View style={styles.empty}>
-          <Text style={styles.emptyText}>Toggle online to start receiving rides.</Text>
-        </View>
-      )}
+            <Text style={styles.waitingTitle}>Waiting for rides...</Text>
+            <Text style={styles.waitingSubtitle}>You'll be notified when a trip is available</Text>
+          </View>
+        ) : (
+          <View style={styles.waitingContainer}>
+            <Text style={styles.offlineIcon}>{'<power>'}</Text>
+            <Text style={styles.waitingTitle}>You're offline</Text>
+            <Text style={styles.waitingSubtitle}>
+              Toggle the switch above to start receiving rides
+            </Text>
+          </View>
+        )}
+      </View>
     </View>
   );
 }
@@ -133,34 +154,31 @@ const styles = StyleSheet.create({
     backgroundColor: '#2a2a42',
   },
   greeting: { fontSize: 20, fontWeight: '700', color: '#fff' },
-  status: { fontSize: 13, marginTop: 2 },
-  statusOnline: { color: '#4caf50' },
-  statusOffline: { color: '#888' },
+  status: { fontSize: 13, marginTop: 2, fontWeight: '600' },
   headerRight: { alignItems: 'flex-end', gap: 8 },
   logoutBtn: { marginTop: 4 },
   logoutText: { color: '#f5c518', fontSize: 12 },
-  sectionTitle: {
-    color: '#aaa',
-    fontSize: 13,
-    fontWeight: '600',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
+  body: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  waitingContainer: { alignItems: 'center', paddingHorizontal: 40 },
+  pulseOuter: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(245, 197, 24, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
   },
-  rideCard: {
-    backgroundColor: '#2a2a42',
-    marginHorizontal: 16,
-    marginBottom: 10,
-    borderRadius: 12,
-    padding: 16,
+  pulseInner: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(245, 197, 24, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  rideAddress: { color: '#fff', fontSize: 15, fontWeight: '600', marginBottom: 4 },
-  rideDest: { color: '#bbb', fontSize: 14, marginBottom: 10 },
-  rideFooter: { flexDirection: 'row', justifyContent: 'space-between' },
-  rideFare: { color: '#f5c518', fontWeight: '700', fontSize: 16 },
-  rideDist: { color: '#888', fontSize: 14 },
-  empty: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  emptyText: { color: '#555', fontSize: 15 },
+  carIcon: { fontSize: 32, color: '#f5c518' },
+  offlineIcon: { fontSize: 48, color: '#555', marginBottom: 24 },
+  waitingTitle: { fontSize: 20, fontWeight: '700', color: '#fff', marginBottom: 8 },
+  waitingSubtitle: { fontSize: 14, color: '#888', textAlign: 'center' },
 });

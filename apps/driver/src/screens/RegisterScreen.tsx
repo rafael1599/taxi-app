@@ -26,6 +26,7 @@ export function RegisterScreen({ navigation }: Props) {
     password: '',
     licenseNumber: '',
     tlcLicense: '',
+    companyId: '',
   });
   const [loading, setLoading] = useState(false);
   const setAuth = useAuthStore((s) => s.setAuth);
@@ -34,7 +35,14 @@ export function RegisterScreen({ navigation }: Props) {
     setForm((prev) => ({ ...prev, [key]: val }));
 
   const handleRegister = async () => {
-    if (!form.fullName || !form.phone || !form.email || !form.password || !form.licenseNumber) {
+    if (
+      !form.fullName ||
+      !form.phone ||
+      !form.email ||
+      !form.password ||
+      !form.licenseNumber ||
+      !form.companyId
+    ) {
       Alert.alert('Validation', 'Please fill in all required fields.');
       return;
     }
@@ -47,6 +55,7 @@ export function RegisterScreen({ navigation }: Props) {
         password: form.password,
         licenseNumber: form.licenseNumber.trim(),
         tlcLicense: form.tlcLicense.trim() || undefined,
+        companyId: form.companyId.trim(),
       });
       setAuth(data.token, data.driverId);
     } catch (err: unknown) {
@@ -59,13 +68,20 @@ export function RegisterScreen({ navigation }: Props) {
     }
   };
 
-  const fields: { label: string; key: keyof typeof form; keyboard?: 'email-address' | 'phone-pad'; secure?: boolean; required?: boolean }[] = [
+  const fields: {
+    label: string;
+    key: keyof typeof form;
+    keyboard?: 'email-address' | 'phone-pad';
+    secure?: boolean;
+    required?: boolean;
+  }[] = [
     { label: 'Full Name *', key: 'fullName', required: true },
     { label: 'Phone *', key: 'phone', keyboard: 'phone-pad', required: true },
     { label: 'Email *', key: 'email', keyboard: 'email-address', required: true },
     { label: 'Password *', key: 'password', secure: true, required: true },
     { label: 'Driver License # *', key: 'licenseNumber', required: true },
     { label: 'TLC License # (optional)', key: 'tlcLicense' },
+    { label: 'Company ID *', key: 'companyId', required: true },
   ];
 
   return (
