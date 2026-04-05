@@ -13,6 +13,13 @@ import {
 } from './tripQueue.js';
 import { getRedis, REDIS_KEYS } from './redis.js';
 import { logRideTransition, logDriverTransition, logOfferEvent } from './auditLog.js';
+import {
+  notifyDriverTripOffer,
+  notifyRiderDriverAssigned,
+  notifyRiderDriverArrived,
+  notifyRiderTripCompleted,
+  notifyRiderNoDriverFound,
+} from './pushNotifications.js';
 import type { Job } from 'bullmq';
 import type { TripJobData } from './tripQueue.js';
 
@@ -219,6 +226,14 @@ async function offerToNextDriver(
     },
   });
 
+  // Push notification to driver
+  notifyDriverTripOffer(closestDriver.id, {
+    rideId,
+    pickupAddress: ride.pickupAddress ?? 'Pickup',
+    dropoffAddress: ride.dropoffAddress ?? 'Dropoff',
+    fareEstimate: ride.fareEstimate ?? '0',
+  }).catch(console.error);
+
   // Schedule offer timeout via BullMQ (durable — survives restart)
   await scheduleOfferTimeout(
     offer.id,
@@ -310,6 +325,23 @@ export async function acceptOffer(
 
   // Notify rider via WhatsApp
   notifyRiderViaWhatsApp(offer.rideId, 'driver_assigned').catch(console.error);
+
+  // Push notification to rider
+  if (ride) {
+    const driver = await db.query.drivers.findFirst({
+      where: eq(schema.drivers.id, driverId),
+      columns: { fullName: true },
+    });
+    const vehicle = await db.query.vehicles.findFirst({
+      where: eq(schema.vehicles.driverId, driverId),
+      columns: { plate: true },
+    });
+    notifyRiderDriverAssigned(ride.riderId, {
+      driverName: driver?.fullName ?? 'Your driver',
+      vehiclePlate: vehicle?.plate ?? '',
+      rideId: offer.rideId,
+    }).catch(console.error);
+  }
 
   return { success: true, rideId: offer.rideId };
 }
@@ -490,6 +522,7 @@ async function expireSearch(rideId: string): Promise<void> {
   // Notify rider via WhatsApp that no driver was found
   if (ride) {
     notifyRiderViaWhatsApp(rideId, 'cancelled').catch(console.error);
+    notifyRiderNoDriverFound(ride.riderId, rideId).catch(console.error);
   }
 }
 
@@ -598,6 +631,16 @@ export async function updateTripStatus(
   if (['arrived', 'picked_up', 'completed'].includes(newStatus)) {
     const waEvent = newStatus as 'arrived' | 'picked_up' | 'completed';
     notifyRiderViaWhatsApp(rideId, waEvent).catch(console.error);
+  }
+
+  // Push notifications to rider
+  if (newStatus === 'arrived') {
+    notifyRiderDriverArrived(ride.riderId, rideId).catch(console.error);
+  } else if (newStatus === 'completed') {
+    notifyRiderTripCompleted(ride.riderId, {
+      rideId,
+      fareFinal: updated.fareFinal ?? updated.fareEstimate ?? '0',
+    }).catch(console.error);
   }
 
   return { success: true, ride: updated };

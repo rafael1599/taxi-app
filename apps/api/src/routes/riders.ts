@@ -3,6 +3,7 @@ import { db, schema } from '@rockland-taxi/db';
 import { eq, and } from 'drizzle-orm';
 import { requireRider } from '../middleware/auth.js';
 import { findNearbyDrivers } from '../services/dispatch.js';
+import { saveRiderPushToken } from '../services/pushNotifications.js';
 import { z } from 'zod';
 
 export async function riderRoutes(app: FastifyInstance) {
@@ -12,6 +13,14 @@ export async function riderRoutes(app: FastifyInstance) {
     return db.query.riders.findFirst({
       where: and(eq(schema.riders.id, user.sub), eq(schema.riders.companyId, user.companyId)),
     });
+  });
+
+  // PUT /riders/me/push-token — register push notification token
+  app.put('/riders/me/push-token', { preHandler: requireRider }, async (request) => {
+    const user = request.user as { sub: string };
+    const { pushToken } = z.object({ pushToken: z.string().min(1) }).parse(request.body);
+    await saveRiderPushToken(user.sub, pushToken);
+    return { ok: true };
   });
 
   // GET /riders/me/nearby-drivers — nearby available drivers (same company only)

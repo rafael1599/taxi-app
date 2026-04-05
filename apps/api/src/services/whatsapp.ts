@@ -146,9 +146,23 @@ async function findOrCreateRider(companyId: string, phone: string, name?: string
 
 // ── Message Sending ───────────────────────────────────────────────────────────
 
+// Per-recipient rate limiting: 1 message/sec to avoid WhatsApp bans
+const lastSentMap = new Map<string, number>();
+const MIN_INTERVAL_MS = 1000;
+
 async function sendMessage(companyId: string, jid: string, text: string): Promise<void> {
   const session = sessions.get(companyId);
   if (!session?.socket) return;
+
+  // Rate limit per recipient
+  const key = `${companyId}:${jid}`;
+  const now = Date.now();
+  const lastSent = lastSentMap.get(key) ?? 0;
+  const wait = MIN_INTERVAL_MS - (now - lastSent);
+  if (wait > 0) {
+    await new Promise((r) => setTimeout(r, wait));
+  }
+  lastSentMap.set(key, Date.now());
 
   try {
     await session.socket.sendMessage(jid, { text });

@@ -1,6 +1,8 @@
 import { db, schema } from '@rockland-taxi/db';
 import { eq, and, sql } from 'drizzle-orm';
 import { haversineDistanceKm } from '@rockland-taxi/shared';
+import { getRedis } from './redis';
+import { createHash } from 'crypto';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -17,6 +19,7 @@ export interface PriceQuoteResult {
   distance: { km: number; miles: number };
   durationMin: number;
   method: 'fixed_route' | 'zone_minimum' | 'base_rate';
+  distanceSource: string;
   currency: string;
   fixedRouteId?: string;
   zoneId?: string;
@@ -26,15 +29,135 @@ export interface PriceQuoteResult {
 
 const KM_TO_MILES = 0.621371;
 const AVG_SPEED_KMH = 30; // rough urban average
+const ROUTE_CACHE_TTL = 86400; // 24 hours
+const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY ?? '';
+const OSRM_BASE_URL = process.env.OSRM_BASE_URL ?? 'https://router.project-osrm.org';
+
+function routeCacheKey(lat1: number, lng1: number, lat2: number, lng2: number): string {
+  const hash = createHash('md5')
+    .update(`${lat1.toFixed(5)},${lng1.toFixed(5)}:${lat2.toFixed(5)},${lng2.toFixed(5)}`)
+    .digest('hex');
+  return `route:${hash}`;
+}
+
+interface DistanceResult {
+  km: number;
+  miles: number;
+  durationMin: number;
+  source: string;
+}
+
+async function getRouteFromCache(key: string): Promise<DistanceResult | null> {
+  try {
+    const cached = await getRedis().get(key);
+    if (cached) return JSON.parse(cached);
+  } catch (_) {
+    /* cache miss is non-fatal */
+  }
+  return null;
+}
+
+async function cacheRoute(key: string, result: DistanceResult): Promise<void> {
+  try {
+    await getRedis().setex(key, ROUTE_CACHE_TTL, JSON.stringify(result));
+  } catch (_) {
+    /* cache write failure is non-fatal */
+  }
+}
+
+async function googleRoutesDistance(
+  pickupLat: number,
+  pickupLng: number,
+  dropoffLat: number,
+  dropoffLng: number,
+): Promise<DistanceResult | null> {
+  if (!GOOGLE_MAPS_API_KEY) return null;
+  try {
+    const res = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
+        'X-Goog-FieldMask': 'routes.distanceMeters,routes.duration',
+      },
+      body: JSON.stringify({
+        origin: { location: { latLng: { latitude: pickupLat, longitude: pickupLng } } },
+        destination: { location: { latLng: { latitude: dropoffLat, longitude: dropoffLng } } },
+        travelMode: 'DRIVE',
+      }),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const route = data.routes?.[0];
+    if (!route?.distanceMeters) return null;
+
+    const km = route.distanceMeters / 1000;
+    const durationSec = parseInt(route.duration?.replace('s', '') ?? '0', 10);
+    return {
+      km,
+      miles: km * KM_TO_MILES,
+      durationMin: Math.ceil(durationSec / 60),
+      source: 'google',
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function osrmDistance(
+  pickupLat: number,
+  pickupLng: number,
+  dropoffLat: number,
+  dropoffLng: number,
+): Promise<DistanceResult | null> {
+  try {
+    const coords = `${pickupLng},${pickupLat};${dropoffLng},${dropoffLat}`;
+    const res = await fetch(`${OSRM_BASE_URL}/route/v1/driving/${coords}?overview=false`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const route = data.routes?.[0];
+    if (!route?.distance) return null;
+
+    const km = route.distance / 1000;
+    return {
+      km,
+      miles: km * KM_TO_MILES,
+      durationMin: Math.ceil(route.duration / 60),
+      source: 'osrm',
+    };
+  } catch {
+    return null;
+  }
+}
 
 async function calculateDistance(
   pickupLat: number,
   pickupLng: number,
   dropoffLat: number,
   dropoffLng: number,
-): Promise<{ km: number; miles: number; durationMin: number; source: string }> {
-  // TODO: Google Routes API integration (Phase 2)
-  // TODO: OSRM fallback (Phase 2)
+): Promise<DistanceResult> {
+  const cacheKey = routeCacheKey(pickupLat, pickupLng, dropoffLat, dropoffLng);
+
+  // Check cache first
+  const cached = await getRouteFromCache(cacheKey);
+  if (cached) return { ...cached, source: `${cached.source}_cached` };
+
+  // Try Google Routes API
+  const google = await googleRoutesDistance(pickupLat, pickupLng, dropoffLat, dropoffLng);
+  if (google) {
+    await cacheRoute(cacheKey, google);
+    return google;
+  }
+
+  // Try OSRM fallback
+  const osrm = await osrmDistance(pickupLat, pickupLng, dropoffLat, dropoffLng);
+  if (osrm) {
+    await cacheRoute(cacheKey, osrm);
+    return osrm;
+  }
 
   // Haversine fallback (always available)
   const km = haversineDistanceKm(pickupLat, pickupLng, dropoffLat, dropoffLng);
@@ -140,6 +263,7 @@ export async function calculatePriceQuote(input: PriceQuoteInput): Promise<Price
       distance: { km: dist.km, miles: dist.miles },
       durationMin: dist.durationMin,
       method: 'fixed_route',
+      distanceSource: dist.source,
       currency: rules.currency,
       fixedRouteId: fixedMatch.id,
     };
@@ -170,6 +294,7 @@ export async function calculatePriceQuote(input: PriceQuoteInput): Promise<Price
     distance: { km: Math.round(dist.km * 100) / 100, miles: Math.round(dist.miles * 100) / 100 },
     durationMin: dist.durationMin,
     method,
+    distanceSource: dist.source,
     currency: rules.currency,
     zoneId,
   };

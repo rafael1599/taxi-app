@@ -5,8 +5,10 @@ import { useAuthStore } from '../store/authStore';
 const BASE_URL =
   (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined) ?? 'http://localhost:3000';
 
+export const API_BASE_URL = BASE_URL;
+
 export const apiClient = axios.create({
-  baseURL: BASE_URL,
+  baseURL: `${BASE_URL}/api/v1`,
   timeout: 10_000,
   headers: { 'Content-Type': 'application/json' },
 });
@@ -38,8 +40,7 @@ export const authApi = {
   login: (email: string, password: string) =>
     apiClient.post<LoginResponse>('/auth/rider/login', { email, password }),
 
-  register: (body: RegisterBody) =>
-    apiClient.post<LoginResponse>('/auth/rider/register', body),
+  register: (body: RegisterBody) => apiClient.post<LoginResponse>('/auth/rider/register', body),
 };
 
 // ── Riders ───────────────────────────────────────────────────────────────────
@@ -103,11 +104,9 @@ export interface RequestRideBody {
 }
 
 export const rideApi = {
-  estimate: (body: RequestRideBody) =>
-    apiClient.post<FareEstimate>('/rides/estimate', body),
+  estimate: (body: RequestRideBody) => apiClient.post<FareEstimate>('/rides/estimate', body),
 
-  request: (body: RequestRideBody) =>
-    apiClient.post<Ride>('/rides', body),
+  request: (body: RequestRideBody) => apiClient.post<Ride>('/rides', body),
 
   get: (id: string) => apiClient.get<Ride>(`/rides/${id}`),
 
@@ -115,8 +114,7 @@ export const rideApi = {
 
   history: () => apiClient.get<Ride[]>('/rides/me/history'),
 
-  cancel: (id: string, reason?: string) =>
-    apiClient.post<Ride>(`/rides/${id}/cancel`, { reason }),
+  cancel: (id: string, reason?: string) => apiClient.post<Ride>(`/rides/${id}/cancel`, { reason }),
 };
 
 // ── Payment methods ───────────────────────────────────────────────────────────
@@ -137,12 +135,10 @@ export interface SetupIntentResponse {
 export const paymentApi = {
   listMethods: () => apiClient.get<PaymentMethod[]>('/payments/methods'),
 
-  createSetupIntent: () =>
-    apiClient.post<SetupIntentResponse>('/payments/setup-intent'),
+  createSetupIntent: () => apiClient.post<SetupIntentResponse>('/payments/setup-intent'),
 
   setDefault: (paymentMethodId: string) =>
     apiClient.patch('/payments/methods/default', { paymentMethodId }),
 
-  remove: (paymentMethodId: string) =>
-    apiClient.delete(`/payments/methods/${paymentMethodId}`),
+  remove: (paymentMethodId: string) => apiClient.delete(`/payments/methods/${paymentMethodId}`),
 };

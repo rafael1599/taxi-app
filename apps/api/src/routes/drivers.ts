@@ -4,6 +4,7 @@ import { db, schema } from '@rockland-taxi/db';
 import { eq, and } from 'drizzle-orm';
 import { requireDriver } from '../middleware/auth.js';
 import { updateDriverLocation } from '../services/dispatch.js';
+import { saveDriverPushToken } from '../services/pushNotifications.js';
 
 const locationSchema = z.object({
   lat: z.number().min(-90).max(90),
@@ -44,6 +45,14 @@ export async function driverRoutes(app: FastifyInstance) {
       .where(eq(schema.drivers.id, user.sub));
 
     return { ok: true, isAvailable };
+  });
+
+  // PUT /drivers/me/push-token — register push notification token
+  app.put('/drivers/me/push-token', { preHandler: requireDriver }, async (request) => {
+    const user = request.user as { sub: string };
+    const { pushToken } = z.object({ pushToken: z.string().min(1) }).parse(request.body);
+    await saveDriverPushToken(user.sub, pushToken);
+    return { ok: true };
   });
 
   // GET /drivers/me/vehicles — list driver's vehicles
