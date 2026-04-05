@@ -1,0 +1,45 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "input=$(cat); cmd=$(echo \"$input\" | jq -r '.tool_input.command // \"\"'); if echo \"$cmd\" | grep -q 'git commit'; then echo '{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"additionalContext\": \"REMINDER commit-craft: Run git diff --staged first. Write conventional commit: type(scope): description (max 50 chars, imperative mood). No Co-Authored-By lines. Types: feat/fix/refactor/chore/docs/style/test/perf/ci.\"}}'; fi",
+            "timeout": 5,
+            "statusMessage": "commit-craft checking..."
+          },
+          {
+            "type": "command",
+            "command": "input=$(cat); cmd=$(echo \"$input\" | jq -r '.tool_input.command // \"\"'); if echo \"$cmd\" | grep -qE 'pm2|nginx|su - github|certbot|ecosystem'; then echo '{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"additionalContext\": \"REMINDER droplet-ops: NUNCA PM2 como root. SIEMPRE: su - github -c \\\\\"pm2 ...\\\\\". PM2 user=github. Paths: backend=/var/www/control-de-horas/packages/backend, frontend=/var/www/excellent-app-fe, bot process=taxi-whatsapp. No editar codigo en /var/www/ — se borra en cada deploy.\"}}'; fi",
+            "timeout": 5,
+            "statusMessage": "droplet-ops checking..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "input=$(cat); fp=$(echo \"$input\" | jq -r '.tool_input.file_path // \"\"'); if echo \"$fp\" | grep -qE '\\.(tsx|jsx|vue|css|html|scss)$'; then echo '{\"hookSpecificOutput\": {\"hookEventName\": \"PostToolUse\", \"additionalContext\": \"REMINDER frontend-design: Review for design quality. Avoid generic AI aesthetics. Use distinctive spacing, typography, color. Production-grade only — no placeholder lorem ipsum, no gray boxes.\"}}'; fi",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "input=$(cat); fp=$(echo \"$input\" | jq -r '.tool_input.file_path // \"\"'); if echo \"$fp\" | grep -qE '\\.(tsx|ts)$' && echo \"$fp\" | grep -qE 'apps/(admin|driver|rider)'; then echo '{\"hookSpecificOutput\": {\"hookEventName\": \"PostToolUse\", \"additionalContext\": \"REMINDER vercel-react-best-practices: Check — memo/useCallback for expensive ops, no inline object props, no useEffect for data fetching (use SWR/React Query), proper key props in lists, avoid prop drilling (use context/zustand).\"}}'; fi",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "input=$(cat); fp=$(echo \"$input\" | jq -r '.tool_input.file_path // \"\"'); if echo \"$fp\" | grep -qE '\\.sql$|migration|schema\\.ts$'; then echo '{\"hookSpecificOutput\": {\"hookEventName\": \"PostToolUse\", \"additionalContext\": \"REMINDER supabase-postgres-best-practices: Check — index on every FK column, avoid SELECT *, use specific column types (not TEXT for everything), NOT NULL where applicable, watch for N+1 queries, use PostGIS functions correctly for geospatial.\"}}'; fi",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
