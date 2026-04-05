@@ -8,6 +8,7 @@ import {
 } from '../middleware/auth.js';
 import {
   calculatePriceQuote,
+  getCurrentSurge,
   getPricingRules,
   upsertPricingRules,
   listZoneMinimums,
@@ -97,6 +98,17 @@ export async function pricingRoutes(app: FastifyInstance) {
       const body = quoteSchema.parse(request.body);
       const quote = await calculatePriceQuote({ companyId, ...body });
       return quote;
+    },
+  );
+
+  // ── Surge status (admin only) ──────────────────────────────────────────
+  app.get(
+    '/pricing/surge',
+    { preHandler: [requireAdmin, requireCompanyScope] },
+    async (request) => {
+      const companyId = getCompanyId(request)!;
+      const multiplier = await getCurrentSurge(companyId);
+      return { companyId, surgeMultiplier: multiplier, surgeActive: multiplier > 1.0 };
     },
   );
 

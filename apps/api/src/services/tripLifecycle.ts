@@ -20,6 +20,7 @@ import {
   notifyRiderTripCompleted,
   notifyRiderNoDriverFound,
 } from './pushNotifications.js';
+import { recordDriverEvent, applyTimeoutPenalty } from './driverMetrics.js';
 import { chargeRidePayment, recordCommission } from './stripe.js';
 import type { Job } from 'bullmq';
 import type { TripJobData } from './tripQueue.js';
@@ -380,6 +381,10 @@ export async function rejectOffer(
 
   logOfferEvent(offerId, companyId, 'rejected', { driverId }).catch(console.error);
 
+  // Record rejection metric and check for penalty
+  recordDriverEvent(driverId, companyId, 'rejection', offer.rideId).catch(console.error);
+  applyTimeoutPenalty(driverId, companyId).catch(console.error);
+
   // Reset driver to idle
   await db
     .update(schema.drivers)
@@ -439,6 +444,9 @@ async function expireOffer(
   await clearActiveTrip(driverId);
 
   logOfferEvent(offerId, companyId, 'expired', { driverId, rideId }).catch(console.error);
+
+  // Record timeout metric
+  recordDriverEvent(driverId, companyId, 'timeout', rideId).catch(console.error);
 
   // Reset driver to idle
   await db
@@ -610,6 +618,7 @@ export async function updateTripStatus(
 
     await clearActiveTrip(driverId);
     logDriverTransition(driverId, companyId, 'completed', 'idle').catch(console.error);
+    recordDriverEvent(driverId, companyId, 'completion', rideId).catch(console.error);
 
     // Set final fare
     await db

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { db, schema } from '@rockland-taxi/db';
 import { eq, desc, count, and, inArray, sql, gte, lte } from 'drizzle-orm';
 import { requireAdmin, getCompanyId } from '../middleware/auth.js';
+import { getDriverPerformanceSummary } from '../services/driverMetrics.js';
 
 export async function adminRoutes(app: FastifyInstance) {
   // GET /admin/dashboard — summary stats (company-scoped)
@@ -66,6 +67,18 @@ export async function adminRoutes(app: FastifyInstance) {
       orderBy: [desc(schema.drivers.createdAt)],
     });
   });
+
+  // GET /admin/drivers/:id/performance — driver metrics (7-day rolling)
+  app.get(
+    '/admin/drivers/:id/performance',
+    { preHandler: requireAdmin },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const companyId = getCompanyId(request);
+      if (!companyId) return reply.code(400).send({ error: 'Company scope required' });
+      return getDriverPerformanceSummary(id, companyId);
+    },
+  );
 
   // PATCH /admin/drivers/:id — approve or suspend
   app.patch('/admin/drivers/:id', { preHandler: requireAdmin }, async (request, reply) => {

@@ -417,6 +417,29 @@ export const ratings = pgTable(
   ],
 );
 
+// ── Driver Metrics ─────────────────────────────────────────────────────────
+
+export const driverMetrics = pgTable(
+  'driver_metrics',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    driverId: uuid('driver_id')
+      .notNull()
+      .references(() => drivers.id, { onDelete: 'cascade' }),
+    companyId: uuid('company_id')
+      .notNull()
+      .references(() => companies.id),
+    eventType: text('event_type').notNull(), // cancellation, completion, timeout, rejection
+    rideId: uuid('ride_id').references(() => rides.id),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    index('driver_metrics_driver_idx').on(t.driverId),
+    index('driver_metrics_company_idx').on(t.companyId),
+    index('driver_metrics_driver_type_window_idx').on(t.driverId, t.eventType, t.createdAt),
+  ],
+);
+
 // ── Admins ──────────────────────────────────────────────────────────────────
 
 export const admins = pgTable('admins', {

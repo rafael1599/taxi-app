@@ -22,6 +22,7 @@ export interface PriceQuoteResult {
   method: 'fixed_route' | 'zone_minimum' | 'base_rate';
   distanceSource: string;
   currency: string;
+  surgeMultiplier: number;
   fixedRouteId?: string;
   zoneId?: string;
 }
@@ -247,6 +248,61 @@ async function getCompanyPricingRules(companyId: string) {
   };
 }
 
+// ── Surge Pricing ──────────────────────────────────────────────────────────
+
+const SURGE_WINDOW_SEC = 900; // 15-minute demand window
+const SURGE_TIERS = [
+  { minRequests: 0, multiplier: 1.0 },
+  { minRequests: 10, multiplier: 1.25 },
+  { minRequests: 20, multiplier: 1.5 },
+  { minRequests: 40, multiplier: 2.0 },
+];
+
+function surgeKey(companyId: string): string {
+  return `surge:demand:${companyId}`;
+}
+
+/** Increment demand counter for a company and return current surge multiplier */
+export async function recordDemandAndGetSurge(companyId: string): Promise<number> {
+  try {
+    const redis = getRedis();
+    const key = surgeKey(companyId);
+    const count = await redis.incr(key);
+    if (count === 1) {
+      // First request in window — set TTL
+      await redis.expire(key, SURGE_WINDOW_SEC);
+    }
+
+    // Find applicable surge tier (highest matching)
+    let multiplier = 1.0;
+    for (const tier of SURGE_TIERS) {
+      if (count >= tier.minRequests) {
+        multiplier = tier.multiplier;
+      }
+    }
+    return multiplier;
+  } catch (_) {
+    return 1.0; // Redis failure → no surge
+  }
+}
+
+/** Get current surge multiplier without incrementing demand */
+export async function getCurrentSurge(companyId: string): Promise<number> {
+  try {
+    const redis = getRedis();
+    const count = parseInt((await redis.get(surgeKey(companyId))) ?? '0', 10);
+    let multiplier = 1.0;
+    for (const tier of SURGE_TIERS) {
+      if (count >= tier.minRequests) {
+        multiplier = tier.multiplier;
+      }
+    }
+    return multiplier;
+  } catch (_) {
+    return 1.0;
+  }
+}
+
 // ── Main quote function ─────────────────────────────────────────────────────
 
 export async function calculatePriceQuote(input: PriceQuoteInput): Promise<PriceQuoteResult> {
@@ -255,8 +311,9 @@ export async function calculatePriceQuote(input: PriceQuoteInput): Promise<Price
   // 1. Calculate distance
   const dist = await calculateDistance(pickupLat, pickupLng, dropoffLat, dropoffLng);
 
-  // 2. Get company pricing rules
+  // 2. Get company pricing rules + surge multiplier
   const rules = await getCompanyPricingRules(companyId);
+  const surgeMultiplier = await recordDemandAndGetSurge(companyId);
 
   // 3. Check fixed route match first (highest priority)
   const fixedMatch = await findFixedRouteMatch(
@@ -267,14 +324,16 @@ export async function calculatePriceQuote(input: PriceQuoteInput): Promise<Price
     dropoffLng,
   );
   if (fixedMatch) {
+    const surgedPrice = Math.round(fixedMatch.fixedPrice * surgeMultiplier * 100) / 100;
     return {
-      price: fixedMatch.fixedPrice,
+      price: surgedPrice,
       distance: { km: dist.km, miles: dist.miles },
       durationMin: dist.durationMin,
       etaRange: buildEtaRange(dist.durationMin),
       method: 'fixed_route',
       distanceSource: dist.source,
       currency: rules.currency,
+      surgeMultiplier,
       fixedRouteId: fixedMatch.id,
     };
   }
@@ -296,8 +355,8 @@ export async function calculatePriceQuote(input: PriceQuoteInput): Promise<Price
     zoneId = zoneMatch.id;
   }
 
-  // Round to 2 decimal places
-  finalPrice = Math.round(finalPrice * 100) / 100;
+  // Apply surge multiplier and round to 2 decimal places
+  finalPrice = Math.round(finalPrice * surgeMultiplier * 100) / 100;
 
   return {
     price: finalPrice,
@@ -307,6 +366,7 @@ export async function calculatePriceQuote(input: PriceQuoteInput): Promise<Price
     method,
     distanceSource: dist.source,
     currency: rules.currency,
+    surgeMultiplier,
     zoneId,
   };
 }
