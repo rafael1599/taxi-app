@@ -20,6 +20,7 @@
     "@rockland-taxi/db": "workspace:*",
     "@rockland-taxi/shared": "workspace:*",
     "@sentry/node": "^8.0.0",
+    "@whiskeysockets/baileys": "7.0.0-rc.9",
     "bullmq": "^5.0.0",
     "drizzle-orm": "^0.45.2",
     "fastify": "^4.27.0",

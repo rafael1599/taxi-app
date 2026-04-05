@@ -36,6 +36,9 @@ coverage/
 ios/
 android/
 
+# WhatsApp sessions (Baileys auth state)
+.whatsapp-sessions/
+
 # Claude (skills symlink + local config)
 .claude/skills
 .claude/skills/

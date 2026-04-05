@@ -3,6 +3,7 @@ import { eq, and, sql } from 'drizzle-orm';
 import { DISPATCH } from '@rockland-taxi/shared/constants';
 import { findNearbyDrivers } from './dispatch.js';
 import { sseManager } from './sseManager.js';
+import { notifyRiderViaWhatsApp } from './whatsapp.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -203,6 +204,9 @@ export async function acceptOffer(
     data: { rideId: offer.rideId, status: 'accepted' },
   });
 
+  // Notify rider via WhatsApp
+  notifyRiderViaWhatsApp(offer.rideId, 'driver_assigned').catch(console.error);
+
   return { success: true, rideId: offer.rideId };
 }
 
@@ -347,6 +351,11 @@ async function expireSearch(rideId: string): Promise<void> {
       .set({ status: 'idle', isAvailable: true, updatedAt: new Date() })
       .where(eq(schema.drivers.id, ride.driverId));
   }
+
+  // Notify rider via WhatsApp that no driver was found
+  if (ride) {
+    notifyRiderViaWhatsApp(rideId, 'cancelled').catch(console.error);
+  }
 }
 
 // ── Trip Status Transitions ───────────────────────────────────────────────────
@@ -433,6 +442,12 @@ export async function updateTripStatus(
     type: 'trip_status_changed',
     data: { rideId, status: newStatus },
   });
+
+  // Notify rider via WhatsApp for key status changes
+  if (['arrived', 'picked_up', 'completed'].includes(newStatus)) {
+    const waEvent = newStatus as 'arrived' | 'picked_up' | 'completed';
+    notifyRiderViaWhatsApp(rideId, waEvent).catch(console.error);
+  }
 
   return { success: true, ride: updated };
 }
