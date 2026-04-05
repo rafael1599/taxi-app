@@ -129,19 +129,27 @@ export const rides = pgTable(
   ],
 );
 
-export const payments = pgTable('payments', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  rideId: uuid('ride_id').notNull().references(() => rides.id),
-  riderId: uuid('rider_id').notNull().references(() => riders.id),
-  amount: numeric('amount', { precision: 10, scale: 2 }).notNull(),
-  currency: char('currency', { length: 3 }).notNull().default('USD'),
-  status: paymentStatusEnum('status').notNull().default('pending'),
-  stripePiId: text('stripe_pi_id'),
-  stripePmId: text('stripe_pm_id'),
-  capturedAt: timestamp('captured_at'),
-  refundedAt: timestamp('refunded_at'),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-});
+export const payments = pgTable(
+  'payments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    rideId: uuid('ride_id').notNull().references(() => rides.id),
+    riderId: uuid('rider_id').notNull().references(() => riders.id),
+    amount: numeric('amount', { precision: 10, scale: 2 }).notNull(),
+    currency: char('currency', { length: 3 }).notNull().default('USD'),
+    status: paymentStatusEnum('status').notNull().default('pending'),
+    stripePiId: text('stripe_pi_id'),
+    stripePmId: text('stripe_pm_id'),
+    capturedAt: timestamp('captured_at'),
+    refundedAt: timestamp('refunded_at'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    index('payments_ride_id_idx').on(t.rideId),
+    index('payments_rider_id_idx').on(t.riderId),
+    index('payments_status_idx').on(t.status),
+  ],
+);
 
 export const adminRoleEnum = pgEnum('admin_role', ['super_admin', 'dispatcher', 'viewer']);
 

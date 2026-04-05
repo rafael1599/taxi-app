@@ -101,9 +101,20 @@ export interface DriverLocation {
   updatedAt: string;
 }
 
+export interface Admin {
+  id: string;
+  fullName: string;
+  email: string;
+  role: 'super_admin' | 'dispatcher' | 'viewer';
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface JwtPayload {
   sub: string;
-  role: 'driver' | 'rider';
+  role: 'driver' | 'rider' | 'admin';
+  adminRole?: 'super_admin' | 'dispatcher' | 'viewer';
   iat: number;
   exp: number;
 }

@@ -17,7 +17,15 @@ export const useAuthStore = create<AuthState>((set) => ({
   user: (() => {
     const token = localStorage.getItem('admin_token');
     const info = localStorage.getItem('admin_info');
-    if (token && info) return { ...JSON.parse(info), token };
+    if (token && info) {
+      try {
+        return { ...JSON.parse(info), token };
+      } catch {
+        localStorage.removeItem('admin_token');
+        localStorage.removeItem('admin_info');
+        return null;
+      }
+    }
     return null;
   })(),
   setUser: (u) => {

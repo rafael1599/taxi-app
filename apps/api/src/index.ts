@@ -18,14 +18,20 @@ import { initSentry } from './plugins/sentry.js';
 initSentry(process.env.npm_package_version);
 
 const PORT = Number(process.env.PORT ?? 3000);
-const JWT_SECRET = process.env.JWT_SECRET ?? 'change-me-before-deploying';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable is required');
+}
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
 
   // ── Plugins ──────────────────────────────────────────────────────────────
   await app.register(fastifyHelmet);
-  await app.register(fastifyCors, { origin: true });
+  const allowedOrigins = process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim())
+    : true;
+  await app.register(fastifyCors, { origin: allowedOrigins });
   await app.register(fastifyRateLimit, { max: 200, timeWindow: '1 minute' });
   await app.register(fastifyJwt, { secret: JWT_SECRET });
   await app.register(fastifyWebsocket);

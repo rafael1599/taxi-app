@@ -65,8 +65,16 @@ export default function MapPage() {
             if (markers.current[driver.id]) {
               (markers.current[driver.id] as import('leaflet').Marker).setLatLng([driver.currentLat, driver.currentLng]);
             } else {
+              const popupContent = document.createElement('div');
+              const nameEl = document.createElement('strong');
+              nameEl.textContent = driver.fullName;
+              const phoneEl = document.createElement('span');
+              phoneEl.textContent = driver.phone;
+              popupContent.appendChild(nameEl);
+              popupContent.appendChild(document.createElement('br'));
+              popupContent.appendChild(phoneEl);
               markers.current[driver.id] = L.marker([driver.currentLat, driver.currentLng])
-                .bindPopup(`<strong>${driver.fullName}</strong><br/>${driver.phone}`)
+                .bindPopup(popupContent)
                 .addTo(map);
             }
           }

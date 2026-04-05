@@ -66,13 +66,21 @@ export async function rideRoutes(app: FastifyInstance) {
     });
   });
 
-  // GET /rides/:id — get a single ride
+  // GET /rides/:id — get a single ride (ownership enforced for riders/drivers)
   app.get('/rides/:id', { preHandler: requireAuth }, async (request, reply) => {
     const { id } = request.params as { id: string };
+    const user = request.user as { sub: string; role: string };
     const ride = await db.query.rides.findFirst({
       where: eq(schema.rides.id, id),
     });
     if (!ride) return reply.code(404).send({ error: 'Ride not found' });
+
+    // Admins can see any ride; riders/drivers can only see their own
+    if (user.role !== 'admin') {
+      const isOwner = ride.riderId === user.sub || ride.driverId === user.sub;
+      if (!isOwner) return reply.code(403).send({ error: 'Forbidden' });
+    }
+
     return ride;
   });
 
