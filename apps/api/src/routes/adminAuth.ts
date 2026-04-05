@@ -66,7 +66,13 @@ export async function adminAuthRoutes(app: FastifyInstance) {
     }
 
     const token = app.jwt.sign(payload, { expiresIn: JWT_EXPIRY_SEC });
-    return { token, adminId: admin.id, adminRole: admin.role, fullName: admin.fullName };
+    return {
+      token,
+      adminId: admin.id,
+      adminRole: admin.role,
+      fullName: admin.fullName,
+      companyId: admin.companyId ?? undefined,
+    };
   });
 }
 

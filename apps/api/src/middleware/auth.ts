@@ -91,21 +91,29 @@ export async function requirePlatformAdmin(request: FastifyRequest, reply: Fasti
 
 /**
  * Extract companyId from JWT and attach to request.
- * For platform_admin, companyId is optional (they can access any company).
+ * For platform_admin, companyId is optional — they can pass X-Company-Id header to scope requests.
  * For company_admin/dispatcher/viewer, companyId is required in the JWT.
  * Drivers and riders always have companyId in their JWT.
  */
 export function getCompanyId(request: FastifyRequest): string | null {
-  const user = request.user as { companyId?: string };
-  return user.companyId ?? null;
+  const user = request.user as { companyId?: string; adminRole?: string };
+  if (user.companyId) return user.companyId;
+  // Platform admins can scope requests via X-Company-Id header
+  if (user.adminRole === 'platform_admin') {
+    const headerCompanyId = request.headers['x-company-id'] as string | undefined;
+    if (headerCompanyId) return headerCompanyId;
+  }
+  return null;
 }
 
 /**
- * Require companyId to be present in JWT. Returns companyId or sends 403.
+ * Require companyId to be present (from JWT or X-Company-Id header for platform_admin).
  */
 export async function requireCompanyScope(request: FastifyRequest, reply: FastifyReply) {
   const companyId = getCompanyId(request);
   if (!companyId) {
-    reply.code(403).send({ error: 'Company scope required' });
+    reply
+      .code(403)
+      .send({ error: 'Company scope required. Platform admins must send X-Company-Id header.' });
   }
 }
