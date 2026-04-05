@@ -17,6 +17,7 @@ import { companyRoutes } from './routes/companies.js';
 import { pricingRoutes } from './routes/pricing.js';
 import { tripLifecycleRoutes } from './routes/tripLifecycle.js';
 import { whatsappRoutes } from './routes/whatsapp.js';
+import { billingRoutes } from './routes/billing.js';
 import { initWhatsAppSessions } from './services/whatsapp.js';
 import { initSentry } from './plugins/sentry.js';
 
@@ -59,6 +60,7 @@ export async function buildApp() {
   await app.register(pricingRoutes, { prefix: '/api/v1' });
   await app.register(tripLifecycleRoutes, { prefix: '/api/v1' });
   await app.register(whatsappRoutes, { prefix: '/api/v1' });
+  await app.register(billingRoutes, { prefix: '/api/v1' });
 
   // Initialize WhatsApp sessions for active companies after server is ready
   app.addHook('onReady', async () => {

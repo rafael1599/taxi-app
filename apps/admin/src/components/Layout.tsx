@@ -9,6 +9,7 @@ const navItems = [
   { to: '/drivers', label: 'Drivers' },
   { to: '/rides', label: 'Rides' },
   { to: '/pricing', label: 'Pricing' },
+  { to: '/billing', label: 'Billing' },
   { to: '/settings', label: 'Company' },
   { to: '/whatsapp', label: 'WhatsApp' },
 ];

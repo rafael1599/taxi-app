@@ -62,6 +62,15 @@ export const adminRoleEnum = pgEnum('admin_role', [
   'platform_admin',
 ]);
 
+export const subscriptionStatusEnum = pgEnum('subscription_status', [
+  'trialing',
+  'active',
+  'past_due',
+  'canceled',
+  'unpaid',
+  'paused',
+]);
+
 // ── Companies (multi-tenant root) ─────────────────────────────────────────────
 
 export const companies = pgTable('companies', {
@@ -72,6 +81,13 @@ export const companies = pgTable('companies', {
   whatsappJid: text('whatsapp_jid'),
   isActive: boolean('is_active').notNull().default(true),
   settings: jsonb('settings').notNull().default({}),
+  stripeAccountId: text('stripe_account_id'),
+  stripeSubscriptionId: text('stripe_subscription_id'),
+  stripeCustomerId: text('stripe_customer_id'),
+  subscriptionStatus: subscriptionStatusEnum('subscription_status').default('trialing'),
+  commissionPercent: numeric('commission_percent', { precision: 5, scale: 2 })
+    .notNull()
+    .default('10.00'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -107,6 +123,9 @@ export const drivers = pgTable(
     licenseNumber: text('license_number').notNull().unique(),
     tlcLicense: text('tlc_license'),
     stripeAccountId: text('stripe_acct'),
+    stripeSubscriptionId: text('stripe_subscription_id'),
+    stripeCustomerId: text('stripe_customer_id'),
+    subscriptionStatus: subscriptionStatusEnum('subscription_status'),
     isActive: boolean('is_active').notNull().default(true),
     isAvailable: boolean('is_available').notNull().default(false),
     status: driverStatusEnum('status').notNull().default('offline'),
@@ -221,6 +240,7 @@ export const payments = pgTable(
     status: paymentStatusEnum('status').notNull().default('pending'),
     stripePiId: text('stripe_pi_id'),
     stripePmId: text('stripe_pm_id'),
+    commissionAmount: numeric('commission_amount', { precision: 10, scale: 2 }),
     capturedAt: timestamp('captured_at'),
     refundedAt: timestamp('refunded_at'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -321,6 +341,45 @@ export const fixedRoutes = pgTable(
   },
   (t) => [index('fixed_routes_company_id_idx').on(t.companyId)],
 );
+
+// ── Commissions ────────────────────────────────────────────────────────────
+
+export const commissions = pgTable(
+  'commissions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    companyId: uuid('company_id')
+      .notNull()
+      .references(() => companies.id, { onDelete: 'cascade' }),
+    rideId: uuid('ride_id')
+      .notNull()
+      .references(() => rides.id, { onDelete: 'cascade' }),
+    driverId: uuid('driver_id')
+      .notNull()
+      .references(() => drivers.id),
+    fareAmount: numeric('fare_amount', { precision: 10, scale: 2 }).notNull(),
+    commissionPercent: numeric('commission_percent', { precision: 5, scale: 2 }).notNull(),
+    commissionAmount: numeric('commission_amount', { precision: 10, scale: 2 }).notNull(),
+    driverEarnings: numeric('driver_earnings', { precision: 10, scale: 2 }).notNull(),
+    stripeTransferId: text('stripe_transfer_id'),
+    status: text('status').notNull().default('pending'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    index('commissions_company_id_idx').on(t.companyId),
+    index('commissions_driver_id_idx').on(t.driverId),
+    index('commissions_ride_id_idx').on(t.rideId),
+  ],
+);
+
+// ── Stripe Webhook Events ─────────────────────────────────────────────────
+
+export const stripeWebhookEvents = pgTable('stripe_webhook_events', {
+  id: text('id').primaryKey(), // Stripe event ID (evt_xxx)
+  type: text('type').notNull(),
+  processedAt: timestamp('processed_at').notNull().defaultNow(),
+  companyId: uuid('company_id').references(() => companies.id),
+});
 
 // ── Admins ──────────────────────────────────────────────────────────────────
 

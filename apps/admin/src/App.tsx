@@ -9,6 +9,7 @@ import MapPage from './pages/MapPage';
 import PricingPage from './pages/PricingPage';
 import CompanySettingsPage from './pages/CompanySettingsPage';
 import WhatsAppPage from './pages/WhatsAppPage';
+import BillingPage from './pages/BillingPage';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const user = useAuthStore((s) => s.user);
@@ -35,6 +36,7 @@ export default function App() {
         <Route path="pricing" element={<PricingPage />} />
         <Route path="settings" element={<CompanySettingsPage />} />
         <Route path="whatsapp" element={<WhatsAppPage />} />
+        <Route path="billing" element={<BillingPage />} />
       </Route>
     </Routes>
   );

@@ -26,6 +26,16 @@ export type PaymentStatus = 'pending' | 'authorized' | 'captured' | 'refunded' |
 
 export type AdminRole = 'super_admin' | 'dispatcher' | 'viewer' | 'platform_admin';
 
+export type SubscriptionStatus =
+  | 'trialing'
+  | 'active'
+  | 'past_due'
+  | 'canceled'
+  | 'unpaid'
+  | 'paused';
+
+export type CommissionStatus = 'pending' | 'transferred' | 'failed';
+
 export interface Company {
   id: string;
   name: string;
@@ -34,6 +44,11 @@ export interface Company {
   whatsappJid: string | null;
   isActive: boolean;
   settings: Record<string, unknown>;
+  stripeAccountId: string | null;
+  stripeSubscriptionId: string | null;
+  stripeCustomerId: string | null;
+  subscriptionStatus: SubscriptionStatus | null;
+  commissionPercent: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -60,6 +75,9 @@ export interface Driver {
   licenseNumber: string;
   tlcLicense: string | null;
   stripeAccountId: string | null;
+  stripeSubscriptionId: string | null;
+  stripeCustomerId: string | null;
+  subscriptionStatus: SubscriptionStatus | null;
   isActive: boolean;
   isAvailable: boolean;
   status: DriverStatus;
@@ -134,6 +152,20 @@ export interface Payment {
   stripePmId: string | null;
   capturedAt: Date | null;
   refundedAt: Date | null;
+  createdAt: Date;
+}
+
+export interface Commission {
+  id: string;
+  companyId: string;
+  rideId: string;
+  driverId: string;
+  fareAmount: string;
+  commissionPercent: string;
+  commissionAmount: string;
+  driverEarnings: string;
+  stripeTransferId: string | null;
+  status: CommissionStatus;
   createdAt: Date;
 }
 
