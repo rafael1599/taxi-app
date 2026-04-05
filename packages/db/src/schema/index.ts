@@ -105,6 +105,7 @@ export const riders = pgTable('riders', {
   avatarUrl: text('avatar_url'),
   stripeCustomerId: text('stripe_cust'),
   pushToken: text('push_token'),
+  phoneVerified: boolean('phone_verified').notNull().default(false),
   avgRating: numeric('avg_rating', { precision: 3, scale: 2 }),
   totalRatings: integer('total_ratings').notNull().default(0),
   isActive: boolean('is_active').notNull().default(true),

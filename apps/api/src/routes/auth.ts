@@ -4,6 +4,7 @@ import { db, schema } from '@rockland-taxi/db';
 import { eq } from 'drizzle-orm';
 import { JWT_EXPIRY_SEC } from '@rockland-taxi/shared';
 import bcrypt from 'bcryptjs';
+import { sendVerificationCode, checkVerificationCode } from '../services/otp.js';
 
 const driverLoginSchema = z.object({
   email: z.string().email(),
@@ -149,6 +150,40 @@ export async function authRoutes(app: FastifyInstance) {
       { expiresIn: JWT_EXPIRY_SEC },
     );
     return { token, riderId: rider.id };
+  });
+
+  // ── OTP Verification ──────────────────────────────────────────────────────
+
+  // POST /auth/otp/send — send verification code to phone
+  app.post('/auth/otp/send', { ...authRateLimit }, async (request, reply) => {
+    const { phone, channel } = z
+      .object({
+        phone: z.string().min(10),
+        channel: z.enum(['sms', 'whatsapp']).optional().default('sms'),
+      })
+      .parse(request.body);
+
+    const result = await sendVerificationCode(phone, channel);
+    if (!result.success) {
+      return reply.code(400).send({ error: result.error });
+    }
+    return { sent: true };
+  });
+
+  // POST /auth/otp/verify — check verification code
+  app.post('/auth/otp/verify', { ...authRateLimit }, async (request, reply) => {
+    const { phone, code } = z
+      .object({
+        phone: z.string().min(10),
+        code: z.string().length(6),
+      })
+      .parse(request.body);
+
+    const result = await checkVerificationCode(phone, code);
+    if (!result.valid) {
+      return reply.code(400).send({ error: result.error ?? 'Invalid code' });
+    }
+    return { verified: true };
   });
 }
 
