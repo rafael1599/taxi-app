@@ -1,10 +1,26 @@
 export type RideStatus =
   | 'requested'
+  | 'searching_driver'
+  | 'driver_assigned'
   | 'accepted'
   | 'arrived'
+  | 'en_route'
   | 'in_progress'
+  | 'picked_up'
   | 'completed'
   | 'cancelled';
+
+export type DriverStatus =
+  | 'offline'
+  | 'idle'
+  | 'incoming'
+  | 'accepted'
+  | 'en_route'
+  | 'arrived'
+  | 'picked_up'
+  | 'completed';
+
+export type TripOfferStatus = 'pending' | 'accepted' | 'rejected' | 'expired';
 
 export type PaymentStatus = 'pending' | 'authorized' | 'captured' | 'refunded' | 'failed';
 
@@ -46,6 +62,7 @@ export interface Driver {
   stripeAccountId: string | null;
   isActive: boolean;
   isAvailable: boolean;
+  status: DriverStatus;
   currentLat: number | null;
   currentLng: number | null;
   locationAt: Date | null;
@@ -91,6 +108,18 @@ export interface Ride {
   cancelReason: string | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface TripOffer {
+  id: string;
+  rideId: string;
+  driverId: string;
+  companyId: string;
+  status: TripOfferStatus;
+  offeredAt: Date;
+  expiresAt: Date;
+  respondedAt: Date | null;
+  createdAt: Date;
 }
 
 export interface Payment {

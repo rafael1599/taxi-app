@@ -18,11 +18,33 @@ import { sql } from 'drizzle-orm';
 
 export const rideStatusEnum = pgEnum('ride_status', [
   'requested',
+  'searching_driver',
+  'driver_assigned',
   'accepted',
   'arrived',
+  'en_route',
   'in_progress',
+  'picked_up',
   'completed',
   'cancelled',
+]);
+
+export const driverStatusEnum = pgEnum('driver_status', [
+  'offline',
+  'idle',
+  'incoming',
+  'accepted',
+  'en_route',
+  'arrived',
+  'picked_up',
+  'completed',
+]);
+
+export const tripOfferStatusEnum = pgEnum('trip_offer_status', [
+  'pending',
+  'accepted',
+  'rejected',
+  'expired',
 ]);
 
 export const paymentStatusEnum = pgEnum('payment_status', [
@@ -87,6 +109,7 @@ export const drivers = pgTable(
     stripeAccountId: text('stripe_acct'),
     isActive: boolean('is_active').notNull().default(true),
     isAvailable: boolean('is_available').notNull().default(false),
+    status: driverStatusEnum('status').notNull().default('offline'),
     currentLat: doublePrecision('current_lat'),
     currentLng: doublePrecision('current_lng'),
     locationAt: timestamp('location_at'),
@@ -98,6 +121,9 @@ export const drivers = pgTable(
       .on(t.isAvailable, t.isActive)
       .where(sql`${t.isAvailable} = true AND ${t.isActive} = true`),
     index('drivers_company_id_idx').on(t.companyId),
+    index('drivers_status_idx')
+      .on(t.status)
+      .where(sql`${t.status} = 'idle'`),
   ],
 );
 
@@ -160,13 +186,17 @@ export const rides = pgTable(
     droppedOffAt: timestamp('dropped_off_at'),
     cancelledAt: timestamp('cancelled_at'),
     cancelReason: text('cancel_reason'),
+    searchExpiresAt: timestamp('search_expires_at'),
+    rejectedDriverIds: text('rejected_driver_ids'), // UUID[] stored as text for Drizzle compat
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
   (t) => [
     index('rides_status_idx')
       .on(t.status)
-      .where(sql`${t.status} IN ('requested', 'accepted', 'in_progress')`),
+      .where(
+        sql`${t.status} IN ('requested', 'searching_driver', 'driver_assigned', 'accepted', 'en_route', 'in_progress')`,
+      ),
     index('rides_rider_id_idx').on(t.riderId, t.createdAt),
     index('rides_driver_id_idx').on(t.driverId, t.createdAt),
     index('rides_company_id_idx').on(t.companyId),
@@ -200,6 +230,37 @@ export const payments = pgTable(
     index('payments_rider_id_idx').on(t.riderId),
     index('payments_status_idx').on(t.status),
     index('payments_company_id_idx').on(t.companyId),
+  ],
+);
+
+// ── Trip Offers ────────────────────────────────────────────────────────────
+
+export const tripOffers = pgTable(
+  'trip_offers',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    rideId: uuid('ride_id')
+      .notNull()
+      .references(() => rides.id, { onDelete: 'cascade' }),
+    driverId: uuid('driver_id')
+      .notNull()
+      .references(() => drivers.id),
+    companyId: uuid('company_id')
+      .notNull()
+      .references(() => companies.id),
+    status: tripOfferStatusEnum('status').notNull().default('pending'),
+    offeredAt: timestamp('offered_at').notNull().defaultNow(),
+    expiresAt: timestamp('expires_at').notNull(),
+    respondedAt: timestamp('responded_at'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    index('trip_offers_ride_id_idx').on(t.rideId),
+    index('trip_offers_driver_id_idx').on(t.driverId),
+    index('trip_offers_company_id_idx').on(t.companyId),
+    index('trip_offers_pending_idx')
+      .on(t.status, t.expiresAt)
+      .where(sql`${t.status} = 'pending'`),
   ],
 );
 

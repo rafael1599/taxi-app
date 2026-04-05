@@ -4,6 +4,7 @@ import { db, schema } from '@rockland-taxi/db';
 import { eq, and, desc } from 'drizzle-orm';
 import { requireRider, requireDriver, requireAuth, getCompanyId } from '../middleware/auth.js';
 import { estimateFare } from '../services/fare.js';
+import { startDriverSearch } from '../services/tripLifecycle.js';
 
 const requestRideSchema = z.object({
   pickupLat: z.number().min(-90).max(90),
@@ -48,6 +49,11 @@ export async function rideRoutes(app: FastifyInstance) {
         status: 'requested',
       })
       .returning();
+
+    // Auto-trigger driver search
+    startDriverSearch(ride.id, user.companyId).catch((err) => {
+      app.log.error({ err, rideId: ride.id }, 'Failed to start driver search');
+    });
 
     return reply.code(201).send(ride);
   });

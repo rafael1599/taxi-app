@@ -7,13 +7,24 @@ export const FARE = {
 } as const;
 
 export const RIDE_STATUS_LABELS: Record<string, string> = {
-  requested: 'Finding driver…',
+  requested: 'Ride requested',
+  searching_driver: 'Finding driver…',
+  driver_assigned: 'Driver assigned',
   accepted: 'Driver on the way',
   arrived: 'Driver arrived',
+  en_route: 'En route to destination',
   in_progress: 'On your way',
+  picked_up: 'Picked up',
   completed: 'Ride complete',
   cancelled: 'Cancelled',
 };
+
+export const DISPATCH = {
+  OFFER_TIMEOUT_SEC: 60,
+  SEARCH_TIMEOUT_SEC: 120,
+  AUTO_ARRIVAL_DISTANCE_METERS: 50,
+  MAX_NEARBY_DRIVERS: 10,
+} as const;
 
 export const MAP_DEFAULTS = {
   // Rockland County, NY center
