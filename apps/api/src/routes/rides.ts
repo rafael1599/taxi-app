@@ -5,6 +5,7 @@ import { eq, and, desc } from 'drizzle-orm';
 import { requireRider, requireDriver, requireAuth, getCompanyId } from '../middleware/auth.js';
 import { estimateFare } from '../services/fare.js';
 import { startDriverSearch } from '../services/tripLifecycle.js';
+import { dispatchToNearestDriver } from '../services/dispatch.js';
 
 const requestRideSchema = z.object({
   pickupLat: z.number().min(-90).max(90),
@@ -20,7 +21,7 @@ const cancelRideSchema = z.object({
 });
 
 export async function rideRoutes(app: FastifyInstance) {
-  // POST /rides — rider requests a ride
+  // POST /rides — rider requests a ride; auto-dispatches to nearest driver
   app.post('/rides', { preHandler: requireRider }, async (request, reply) => {
     const user = request.user as { sub: string; companyId: string };
     const body = requestRideSchema.parse(request.body);
@@ -32,7 +33,7 @@ export async function rideRoutes(app: FastifyInstance) {
       body.dropoffLng,
     );
 
-    const [ride] = await db
+    const rows = await db
       .insert(schema.rides)
       .values({
         companyId: user.companyId,
@@ -49,6 +50,8 @@ export async function rideRoutes(app: FastifyInstance) {
         status: 'requested',
       })
       .returning();
+
+    const ride = rows[0]!;
 
     // Auto-trigger driver search
     startDriverSearch(ride.id, user.companyId).catch((err) => {
@@ -103,7 +106,7 @@ export async function rideRoutes(app: FastifyInstance) {
     return ride;
   });
 
-  // POST /rides/:id/accept — driver accepts a ride
+  // POST /rides/:id/accept — dispatched driver accepts the ride
   app.post('/rides/:id/accept', { preHandler: requireDriver }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user as { sub: string; companyId: string };
@@ -111,7 +114,6 @@ export async function rideRoutes(app: FastifyInstance) {
     const [updated] = await db
       .update(schema.rides)
       .set({
-        driverId: user.sub,
         status: 'accepted',
         acceptedAt: new Date(),
         updatedAt: new Date(),
@@ -119,6 +121,7 @@ export async function rideRoutes(app: FastifyInstance) {
       .where(
         and(
           eq(schema.rides.id, id),
+          eq(schema.rides.driverId, user.sub),
           eq(schema.rides.status, 'requested'),
           eq(schema.rides.companyId, user.companyId),
         ),
@@ -126,7 +129,7 @@ export async function rideRoutes(app: FastifyInstance) {
       .returning();
 
     if (!updated) {
-      return reply.code(409).send({ error: 'Ride is no longer available' });
+      return reply.code(409).send({ error: 'Ride is no longer available or not assigned to you' });
     }
 
     // Mark driver unavailable while on a ride
@@ -136,6 +139,50 @@ export async function rideRoutes(app: FastifyInstance) {
       .where(eq(schema.drivers.id, user.sub));
 
     return updated;
+  });
+
+  // POST /rides/:id/reject — dispatched driver rejects; re-dispatch to next nearest
+  app.post('/rides/:id/reject', { preHandler: requireDriver }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const user = request.user as { sub: string; companyId?: string };
+
+    const ride = await db.query.rides.findFirst({
+      where: and(
+        eq(schema.rides.id, id),
+        eq(schema.rides.driverId, user.sub),
+        eq(schema.rides.status, 'requested'),
+      ),
+    });
+
+    if (!ride) {
+      return reply.code(409).send({ error: 'Ride not found or not assigned to you' });
+    }
+
+    const updatedRejectedIds = [...(ride.rejectedDriverIds ?? []), user.sub];
+
+    // Clear current driver assignment
+    await db
+      .update(schema.rides)
+      .set({
+        driverId: null,
+        rejectedDriverIds: updatedRejectedIds,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.rides.id, id));
+
+    // Try to dispatch to next nearest driver
+    const next = await dispatchToNearestDriver(
+      id,
+      ride.pickupLat,
+      ride.pickupLng,
+      updatedRejectedIds,
+      ride.companyId ?? undefined,
+    );
+
+    return reply.send({
+      message: next ? `Re-dispatched to next available driver` : 'No drivers available nearby',
+      nextDriverId: next?.id ?? null,
+    });
   });
 
   // POST /rides/:id/start — driver starts the ride (picked up rider)

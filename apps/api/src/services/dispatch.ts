@@ -65,6 +65,95 @@ export async function findNearbyDrivers(
   }));
 }
 
+/**
+ * Find available drivers excluding already-rejected ones.
+ */
+export async function findNearbyDriversExcluding(
+  pickupLat: number,
+  pickupLng: number,
+  excludeDriverIds: string[],
+  radiusKm = 10,
+  companyId?: string,
+): Promise<NearbyDriver[]> {
+  const companyFilter = companyId ? sql`AND d.company_id = ${companyId}` : sql``;
+  const excludeList =
+    excludeDriverIds.length > 0
+      ? sql`AND d.id != ALL(ARRAY[${sql.raw(excludeDriverIds.map((id) => `'${id}'::uuid`).join(','))}])`
+      : sql``;
+
+  const rows = await db.execute(sql`
+    SELECT
+      d.id,
+      d.full_name,
+      d.current_lat,
+      d.current_lng,
+      ST_Distance(
+        ST_SetSRID(ST_MakePoint(d.current_lng, d.current_lat), 4326)::geography,
+        ST_SetSRID(ST_MakePoint(${pickupLng}, ${pickupLat}), 4326)::geography
+      ) / 1000.0 AS distance_km
+    FROM drivers d
+    WHERE
+      d.is_available = TRUE
+      AND d.is_active = TRUE
+      AND d.current_lat IS NOT NULL
+      AND d.current_lng IS NOT NULL
+      AND d.location_at > NOW() - INTERVAL '60 seconds'
+      ${companyFilter}
+      ${excludeList}
+      AND ST_DWithin(
+        ST_SetSRID(ST_MakePoint(d.current_lng, d.current_lat), 4326)::geography,
+        ST_SetSRID(ST_MakePoint(${pickupLng}, ${pickupLat}), 4326)::geography,
+        ${radiusKm * 1000}
+      )
+    ORDER BY distance_km ASC
+    LIMIT 1
+  `);
+
+  return (
+    rows.rows as Array<{
+      id: string;
+      full_name: string;
+      current_lat: number;
+      current_lng: number;
+      distance_km: number;
+    }>
+  ).map((r) => ({
+    id: r.id,
+    fullName: r.full_name,
+    currentLat: r.current_lat,
+    currentLng: r.current_lng,
+    distanceKm: r.distance_km,
+  }));
+}
+
+/**
+ * Assign the nearest available driver to a ride.
+ * Returns the driver assigned, or null if none found.
+ */
+export async function dispatchToNearestDriver(
+  rideId: string,
+  pickupLat: number,
+  pickupLng: number,
+  rejectedDriverIds: string[] = [],
+  companyId?: string,
+): Promise<NearbyDriver | null> {
+  const [nearest] = await findNearbyDriversExcluding(
+    pickupLat,
+    pickupLng,
+    rejectedDriverIds,
+    10,
+    companyId,
+  );
+  if (!nearest) return null;
+
+  await db
+    .update(schema.rides)
+    .set({ driverId: nearest.id, updatedAt: new Date() })
+    .where(eq(schema.rides.id, rideId));
+
+  return nearest;
+}
+
 const MIN_DISTANCE_METERS = 10; // Ignore updates closer than this (GPS noise)
 
 function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
