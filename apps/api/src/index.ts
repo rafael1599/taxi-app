@@ -5,6 +5,9 @@ import fastifyJwt from '@fastify/jwt';
 import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyWebsocket from '@fastify/websocket';
 
+import { sql } from 'drizzle-orm';
+import { getRedis, closeRedis } from './services/redis.js';
+import { initTripWorker, closeTripQueue } from './services/tripQueue.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { authRoutes } from './routes/auth.js';
 import { rideRoutes } from './routes/rides.js';
@@ -38,7 +41,17 @@ export async function buildApp() {
     ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim())
     : true;
   await app.register(fastifyCors, { origin: allowedOrigins });
-  await app.register(fastifyRateLimit, { max: 200, timeWindow: '1 minute' });
+  await app.register(fastifyRateLimit, {
+    max: 200,
+    timeWindow: '1 minute',
+    redis: getRedis(),
+    keyGenerator: (request) => {
+      // Rate limit per user (from JWT) or per IP
+      const userId = (request as any).user?.id;
+      if (userId) return `user:${userId}`;
+      return request.ip;
+    },
+  });
   await app.register(fastifyJwt, { secret: JWT_SECRET });
   await app.register(fastifyWebsocket);
 
@@ -46,7 +59,51 @@ export async function buildApp() {
   app.setErrorHandler(errorHandler);
 
   // ── Health check ──────────────────────────────────────────────────────────
-  app.get('/health', async () => ({ status: 'ok', ts: Date.now() }));
+  app.get('/health', async () => {
+    const checks: Record<string, string> = {};
+    let healthy = true;
+
+    // Redis check
+    try {
+      const pong = await getRedis().ping();
+      checks.redis = pong === 'PONG' ? 'ok' : 'degraded';
+    } catch {
+      checks.redis = 'down';
+      healthy = false;
+    }
+
+    // DB check
+    try {
+      const { db: database } = await import('@rockland-taxi/db');
+      await database.execute(sql`SELECT 1`);
+      checks.database = 'ok';
+    } catch {
+      checks.database = 'down';
+      healthy = false;
+    }
+
+    return {
+      status: healthy ? 'ok' : 'degraded',
+      ts: Date.now(),
+      checks,
+    };
+  });
+
+  // ── Metrics endpoint ──────────────────────────────────────────────────────
+  app.get('/health/metrics', async () => {
+    const redis = getRedis();
+    const info = await redis.info('clients');
+    const connectedClients = info.match(/connected_clients:(\d+)/)?.[1] ?? '0';
+    const sseConnections = (
+      await import('./services/sseManager.js')
+    ).sseManager.getConnectionCount();
+
+    return {
+      ts: Date.now(),
+      redis: { connectedClients: Number(connectedClients) },
+      sse: { activeConnections: sseConnections },
+    };
+  });
 
   // ── Routes ────────────────────────────────────────────────────────────────
   await app.register(authRoutes, { prefix: '/api/v1' });
@@ -62,11 +119,21 @@ export async function buildApp() {
   await app.register(whatsappRoutes, { prefix: '/api/v1' });
   await app.register(billingRoutes, { prefix: '/api/v1' });
 
-  // Initialize WhatsApp sessions for active companies after server is ready
+  // Initialize Redis-backed services after server is ready
   app.addHook('onReady', async () => {
+    // Start BullMQ worker for trip dispatch jobs
+    initTripWorker();
+
+    // Initialize WhatsApp sessions
     initWhatsAppSessions().catch((err) => {
       app.log.error({ err }, 'Failed to initialize WhatsApp sessions');
     });
+  });
+
+  // Graceful shutdown
+  app.addHook('onClose', async () => {
+    await closeTripQueue();
+    await closeRedis();
   });
 
   return app;

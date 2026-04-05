@@ -12,6 +12,7 @@ import { db, schema } from '@rockland-taxi/db';
 import { eq, and } from 'drizzle-orm';
 import { calculatePriceQuote, type PriceQuoteResult } from './pricing.js';
 import { startDriverSearch } from './tripLifecycle.js';
+import { getRedis, REDIS_KEYS } from './redis.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -63,10 +64,29 @@ const MAPS_PATTERNS = [
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
-// companyId → session
+// companyId → session (stays in-memory — Baileys sockets are not serializable)
 const sessions = new Map<string, CompanySession>();
-// senderJid → pending booking
-const pendingBookings = new Map<string, PendingBooking>();
+
+// ── Redis-backed Pending Bookings ────────────────────────────────────────────
+
+async function getBooking(senderJid: string): Promise<PendingBooking | null> {
+  const redis = getRedis();
+  const data = await redis.get(REDIS_KEYS.waBooking(senderJid));
+  if (!data) return null;
+  return JSON.parse(data) as PendingBooking;
+}
+
+async function setBooking(senderJid: string, booking: PendingBooking): Promise<void> {
+  const redis = getRedis();
+  // Exclude the expiryTimer from serialization (timers are per-process)
+  const { expiryTimer, ...serializable } = booking;
+  await redis.set(REDIS_KEYS.waBooking(senderJid), JSON.stringify(serializable), 'EX', 150); // 2.5min TTL (slightly longer than booking expiry)
+}
+
+async function deleteBooking(senderJid: string): Promise<void> {
+  const redis = getRedis();
+  await redis.del(REDIS_KEYS.waBooking(senderJid));
+}
 
 // ── Google Maps Coordinate Extraction ─────────────────────────────────────────
 
@@ -139,29 +159,14 @@ async function sendMessage(companyId: string, jid: string, text: string): Promis
 
 // ── Booking State Machine ─────────────────────────────────────────────────────
 
-function clearBooking(senderJid: string): void {
-  const booking = pendingBookings.get(senderJid);
-  if (booking?.expiryTimer) clearTimeout(booking.expiryTimer);
-  pendingBookings.delete(senderJid);
+async function clearBooking(senderJid: string): Promise<void> {
+  await deleteBooking(senderJid);
 }
 
-function startBookingExpiry(senderJid: string): void {
-  const booking = pendingBookings.get(senderJid);
-  if (!booking) return;
-
-  if (booking.expiryTimer) clearTimeout(booking.expiryTimer);
-
-  booking.expiryTimer = setTimeout(() => {
-    const b = pendingBookings.get(senderJid);
-    if (b && b.state !== 'SEARCHING_DRIVER') {
-      sendMessage(
-        b.companyId,
-        senderJid,
-        '⏰ Your booking request has expired. Send a new location to start again.',
-      );
-      pendingBookings.delete(senderJid);
-    }
-  }, BOOKING_EXPIRY_MS);
+async function startBookingExpiry(senderJid: string, booking: PendingBooking): Promise<void> {
+  // Redis TTL handles expiry. The key has a 2.5-min TTL set in setBooking().
+  // We still save the booking to refresh the TTL.
+  await setBooking(senderJid, booking);
 }
 
 async function handleIncomingMessage(
@@ -178,13 +183,13 @@ async function handleIncomingMessage(
   const textLower = text.toLowerCase();
   const senderPhone = jidToPhone(senderJid);
 
-  // Check for active booking
-  const booking = pendingBookings.get(senderJid);
+  // Check for active booking (from Redis)
+  const booking = await getBooking(senderJid);
 
   // ── Cancel command ─────────────────────────────────────────────────────
   if (textLower === 'cancel' || textLower === 'cancelar') {
     if (booking) {
-      clearBooking(senderJid);
+      await clearBooking(senderJid);
       await sendMessage(
         companyId,
         senderJid,
@@ -214,7 +219,7 @@ async function handleIncomingMessage(
       return;
     }
     if (textLower === 'no' || textLower === '2') {
-      clearBooking(senderJid);
+      await clearBooking(senderJid);
       await sendMessage(companyId, senderJid, '❌ Booking cancelled. Send a new location anytime!');
       return;
     }
@@ -257,8 +262,7 @@ async function handleIncomingMessage(
       pickupAddress: address,
       createdAt: Date.now(),
     };
-    pendingBookings.set(senderJid, newBooking);
-    startBookingExpiry(senderJid);
+    await setBooking(senderJid, newBooking);
 
     await sendMessage(
       companyId,
@@ -286,7 +290,7 @@ async function handleIncomingMessage(
 
       booking.priceQuote = quote;
       booking.state = 'AWAITING_CONFIRMATION';
-      startBookingExpiry(senderJid);
+      await setBooking(senderJid, booking);
 
       const distText = `${quote.distance.miles.toFixed(1)} mi`;
       const timeText = `~${quote.durationMin} min`;
@@ -304,7 +308,7 @@ async function handleIncomingMessage(
       );
     } catch (err) {
       console.error('[WhatsApp] Price calculation error:', err);
-      clearBooking(senderJid);
+      await clearBooking(senderJid);
       await sendMessage(
         companyId,
         senderJid,
@@ -356,7 +360,7 @@ async function confirmBooking(
     );
 
     // Clear booking (ride is now in the system)
-    clearBooking(senderJid);
+    await clearBooking(senderJid);
 
     // Store the WhatsApp JID on this ride for notifications
     // We'll use the rider's phone to look up their JID later
@@ -372,7 +376,7 @@ async function confirmBooking(
     }
   } catch (err) {
     console.error('[WhatsApp] Error confirming booking:', err);
-    clearBooking(senderJid);
+    await clearBooking(senderJid);
     await sendMessage(
       companyId,
       senderJid,

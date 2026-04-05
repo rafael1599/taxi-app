@@ -198,4 +198,19 @@ export async function adminRoutes(app: FastifyInstance) {
       },
     });
   });
+
+  // GET /admin/audit-log — audit log for state transitions (company-scoped)
+  app.get('/admin/audit-log', { preHandler: requireAdmin }, async (request) => {
+    const companyId = getCompanyId(request);
+    const { limit = '100', offset = '0' } = (request.query as Record<string, string>) || {};
+
+    const { getAuditLog } = await import('../services/auditLog.js');
+    const entries = await getAuditLog(
+      companyId ?? undefined,
+      Math.min(Number(limit) || 100, 500),
+      Number(offset) || 0,
+    );
+
+    return { entries, count: entries.length };
+  });
 }
