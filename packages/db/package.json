@@ -8,6 +8,7 @@
   "scripts": {
     "generate": "drizzle-kit generate",
     "migrate": "tsx scripts/migrate.ts",
+    "seed": "tsx scripts/seed.ts",
     "studio": "drizzle-kit studio",
     "type-check": "tsc --noEmit"
   },

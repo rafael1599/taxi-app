@@ -11,13 +11,16 @@ export interface NearbyDriver {
 
 /**
  * Find available drivers within radiusKm of a pickup point using PostGIS ST_DWithin.
- * Falls back to simple lat/lng bounding box if PostGIS unavailable.
+ * Scoped to a specific company.
  */
 export async function findNearbyDrivers(
   pickupLat: number,
   pickupLng: number,
   radiusKm = 10,
+  companyId?: string,
 ): Promise<NearbyDriver[]> {
+  const companyFilter = companyId ? sql`AND d.company_id = ${companyId}` : sql``;
+
   const rows = await db.execute(sql`
     SELECT
       d.id,
@@ -34,6 +37,7 @@ export async function findNearbyDrivers(
       AND d.is_active = TRUE
       AND d.current_lat IS NOT NULL
       AND d.current_lng IS NOT NULL
+      ${companyFilter}
       AND ST_DWithin(
         ST_SetSRID(ST_MakePoint(d.current_lng, d.current_lat), 4326)::geography,
         ST_SetSRID(ST_MakePoint(${pickupLng}, ${pickupLat}), 4326)::geography,
@@ -43,13 +47,15 @@ export async function findNearbyDrivers(
     LIMIT 10
   `);
 
-  return (rows.rows as Array<{
-    id: string;
-    full_name: string;
-    current_lat: number;
-    current_lng: number;
-    distance_km: number;
-  }>).map((r) => ({
+  return (
+    rows.rows as Array<{
+      id: string;
+      full_name: string;
+      current_lat: number;
+      current_lng: number;
+      distance_km: number;
+    }>
+  ).map((r) => ({
     id: r.id,
     fullName: r.full_name,
     currentLat: r.current_lat,

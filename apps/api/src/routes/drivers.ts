@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { db, schema } from '@rockland-taxi/db';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { requireDriver } from '../middleware/auth.js';
 import { updateDriverLocation } from '../services/dispatch.js';
 
@@ -17,9 +17,9 @@ const availabilitySchema = z.object({
 export async function driverRoutes(app: FastifyInstance) {
   // GET /drivers/me — get own profile
   app.get('/drivers/me', { preHandler: requireDriver }, async (request) => {
-    const user = request.user as { sub: string };
+    const user = request.user as { sub: string; companyId: string };
     const driver = await db.query.drivers.findFirst({
-      where: eq(schema.drivers.id, user.sub),
+      where: and(eq(schema.drivers.id, user.sub), eq(schema.drivers.companyId, user.companyId)),
       columns: { passwordHash: false },
     });
     return driver;
@@ -48,19 +48,26 @@ export async function driverRoutes(app: FastifyInstance) {
 
   // GET /drivers/me/vehicles — list driver's vehicles
   app.get('/drivers/me/vehicles', { preHandler: requireDriver }, async (request) => {
-    const user = request.user as { sub: string };
+    const user = request.user as { sub: string; companyId: string };
     return db.query.vehicles.findMany({
-      where: eq(schema.vehicles.driverId, user.sub),
+      where: and(
+        eq(schema.vehicles.driverId, user.sub),
+        eq(schema.vehicles.companyId, user.companyId),
+      ),
     });
   });
 
   // POST /drivers/me/vehicles — register a vehicle
   app.post('/drivers/me/vehicles', { preHandler: requireDriver }, async (request, reply) => {
-    const user = request.user as { sub: string };
+    const user = request.user as { sub: string; companyId: string };
     const vehicleSchema = z.object({
       make: z.string().min(1),
       model: z.string().min(1),
-      year: z.number().int().min(2000).max(new Date().getFullYear() + 1),
+      year: z
+        .number()
+        .int()
+        .min(2000)
+        .max(new Date().getFullYear() + 1),
       color: z.string().min(1),
       plate: z.string().min(1),
     });
@@ -68,7 +75,7 @@ export async function driverRoutes(app: FastifyInstance) {
 
     const [vehicle] = await db
       .insert(schema.vehicles)
-      .values({ ...body, driverId: user.sub })
+      .values({ ...body, driverId: user.sub, companyId: user.companyId })
       .returning();
 
     return reply.code(201).send(vehicle);

@@ -21,6 +21,7 @@ const driverRegisterSchema = z.object({
   password: z.string().min(8),
   licenseNumber: z.string().min(4),
   tlcLicense: z.string().optional(),
+  companyId: z.string().uuid(),
 });
 
 const riderRegisterSchema = z.object({
@@ -28,6 +29,7 @@ const riderRegisterSchema = z.object({
   phone: z.string().min(10),
   email: z.string().email(),
   password: z.string().min(8),
+  companyId: z.string().uuid(),
 });
 
 export async function authRoutes(app: FastifyInstance) {
@@ -39,6 +41,7 @@ export async function authRoutes(app: FastifyInstance) {
     const [driver] = await db
       .insert(schema.drivers)
       .values({
+        companyId: body.companyId,
         fullName: body.fullName,
         phone: body.phone,
         email: body.email,
@@ -46,10 +49,10 @@ export async function authRoutes(app: FastifyInstance) {
         licenseNumber: body.licenseNumber,
         tlcLicense: body.tlcLicense ?? null,
       })
-      .returning({ id: schema.drivers.id });
+      .returning({ id: schema.drivers.id, companyId: schema.drivers.companyId });
 
     const token = app.jwt.sign(
-      { sub: driver.id, role: 'driver' },
+      { sub: driver.id, role: 'driver', companyId: driver.companyId },
       { expiresIn: JWT_EXPIRY_SEC },
     );
     return reply.code(201).send({ token, driverId: driver.id });
@@ -67,7 +70,7 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     const token = app.jwt.sign(
-      { sub: driver.id, role: 'driver' },
+      { sub: driver.id, role: 'driver', companyId: driver.companyId },
       { expiresIn: JWT_EXPIRY_SEC },
     );
     return { token, driverId: driver.id };
@@ -81,11 +84,12 @@ export async function authRoutes(app: FastifyInstance) {
     const [rider] = await db
       .insert(schema.riders)
       .values({
+        companyId: body.companyId,
         fullName: body.fullName,
         phone: body.phone,
         email: body.email,
       })
-      .returning({ id: schema.riders.id });
+      .returning({ id: schema.riders.id, companyId: schema.riders.companyId });
 
     await db.insert(schema.ridersAuth).values({
       riderId: rider.id,
@@ -93,7 +97,7 @@ export async function authRoutes(app: FastifyInstance) {
     });
 
     const token = app.jwt.sign(
-      { sub: rider.id, role: 'rider' },
+      { sub: rider.id, role: 'rider', companyId: rider.companyId },
       { expiresIn: JWT_EXPIRY_SEC },
     );
     return reply.code(201).send({ token, riderId: rider.id });
@@ -118,7 +122,7 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     const token = app.jwt.sign(
-      { sub: rider.id, role: 'rider' },
+      { sub: rider.id, role: 'rider', companyId: rider.companyId },
       { expiresIn: JWT_EXPIRY_SEC },
     );
     return { token, riderId: rider.id };

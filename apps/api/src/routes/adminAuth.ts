@@ -14,6 +14,7 @@ const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
   role: z.enum(['super_admin', 'dispatcher', 'viewer']).default('viewer'),
+  companyId: z.string().uuid().optional(),
 });
 
 export async function adminAuthRoutes(app: FastifyInstance) {
@@ -25,12 +26,21 @@ export async function adminAuthRoutes(app: FastifyInstance) {
     }
     const body = registerSchema.parse(request.body);
     const hash = await hashPassword(body.password);
+
+    // First admin is always platform_admin (no company scope)
     const [admin] = await db
       .insert(schema.admins)
-      .values({ fullName: body.fullName, email: body.email, passwordHash: hash, role: 'super_admin' })
+      .values({
+        fullName: body.fullName,
+        email: body.email,
+        passwordHash: hash,
+        role: 'platform_admin',
+        companyId: null,
+      })
       .returning({ id: schema.admins.id, role: schema.admins.role });
+
     const token = app.jwt.sign(
-      { sub: admin.id, role: 'admin', adminRole: 'super_admin' },
+      { sub: admin.id, role: 'admin', adminRole: 'platform_admin' },
       { expiresIn: JWT_EXPIRY_SEC },
     );
     return reply.code(201).send({ token, adminId: admin.id });
@@ -44,10 +54,18 @@ export async function adminAuthRoutes(app: FastifyInstance) {
       return reply.code(401).send({ error: 'Invalid credentials' });
     }
     if (!admin.isActive) return reply.code(403).send({ error: 'Account disabled' });
-    const token = app.jwt.sign(
-      { sub: admin.id, role: 'admin', adminRole: admin.role },
-      { expiresIn: JWT_EXPIRY_SEC },
-    );
+
+    const payload: Record<string, unknown> = {
+      sub: admin.id,
+      role: 'admin',
+      adminRole: admin.role,
+    };
+    // Include companyId for company-scoped admins
+    if (admin.companyId) {
+      payload.companyId = admin.companyId;
+    }
+
+    const token = app.jwt.sign(payload, { expiresIn: JWT_EXPIRY_SEC });
     return { token, adminId: admin.id, adminRole: admin.role, fullName: admin.fullName };
   });
 }

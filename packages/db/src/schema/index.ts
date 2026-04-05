@@ -4,6 +4,7 @@ import {
   doublePrecision,
   index,
   integer,
+  jsonb,
   numeric,
   pgEnum,
   pgTable,
@@ -32,10 +33,34 @@ export const paymentStatusEnum = pgEnum('payment_status', [
   'failed',
 ]);
 
+export const adminRoleEnum = pgEnum('admin_role', [
+  'super_admin',
+  'dispatcher',
+  'viewer',
+  'platform_admin',
+]);
+
+// ── Companies (multi-tenant root) ─────────────────────────────────────────────
+
+export const companies = pgTable('companies', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  slug: text('slug').notNull().unique(),
+  logo: text('logo'),
+  whatsappJid: text('whatsapp_jid'),
+  isActive: boolean('is_active').notNull().default(true),
+  settings: jsonb('settings').notNull().default({}),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
 // ── Tables ─────────────────────────────────────────────────────────────────────
 
 export const riders = pgTable('riders', {
   id: uuid('id').primaryKey().defaultRandom(),
+  companyId: uuid('company_id')
+    .notNull()
+    .references(() => companies.id),
   fullName: text('full_name').notNull(),
   phone: text('phone').notNull().unique(),
   email: text('email').notNull().unique(),
@@ -50,6 +75,9 @@ export const drivers = pgTable(
   'drivers',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    companyId: uuid('company_id')
+      .notNull()
+      .references(() => companies.id),
     fullName: text('full_name').notNull(),
     phone: text('phone').notNull().unique(),
     email: text('email').notNull().unique(),
@@ -66,13 +94,18 @@ export const drivers = pgTable(
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
   (t) => [
-    index('drivers_available_idx').on(t.isAvailable, t.isActive).where(sql`${t.isAvailable} = true AND ${t.isActive} = true`),
+    index('drivers_available_idx')
+      .on(t.isAvailable, t.isActive)
+      .where(sql`${t.isAvailable} = true AND ${t.isActive} = true`),
+    index('drivers_company_id_idx').on(t.companyId),
   ],
 );
 
 export const ridersAuth = pgTable('riders_auth', {
   id: uuid('id').primaryKey().defaultRandom(),
-  riderId: uuid('rider_id').notNull().references(() => riders.id, { onDelete: 'cascade' }),
+  riderId: uuid('rider_id')
+    .notNull()
+    .references(() => riders.id, { onDelete: 'cascade' }),
   passwordHash: text('password_hash').notNull(),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
@@ -80,7 +113,12 @@ export const ridersAuth = pgTable('riders_auth', {
 
 export const vehicles = pgTable('vehicles', {
   id: uuid('id').primaryKey().defaultRandom(),
-  driverId: uuid('driver_id').notNull().references(() => drivers.id, { onDelete: 'cascade' }),
+  companyId: uuid('company_id')
+    .notNull()
+    .references(() => companies.id),
+  driverId: uuid('driver_id')
+    .notNull()
+    .references(() => drivers.id, { onDelete: 'cascade' }),
   make: text('make').notNull(),
   model: text('model').notNull(),
   year: integer('year').notNull(),
@@ -94,7 +132,12 @@ export const rides = pgTable(
   'rides',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    riderId: uuid('rider_id').notNull().references(() => riders.id),
+    companyId: uuid('company_id')
+      .notNull()
+      .references(() => companies.id),
+    riderId: uuid('rider_id')
+      .notNull()
+      .references(() => riders.id),
     driverId: uuid('driver_id').references(() => drivers.id),
     vehicleId: uuid('vehicle_id').references(() => vehicles.id),
     status: rideStatusEnum('status').notNull().default('requested'),
@@ -121,11 +164,12 @@ export const rides = pgTable(
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
   (t) => [
-    index('rides_status_idx').on(t.status).where(
-      sql`${t.status} IN ('requested', 'accepted', 'in_progress')`,
-    ),
+    index('rides_status_idx')
+      .on(t.status)
+      .where(sql`${t.status} IN ('requested', 'accepted', 'in_progress')`),
     index('rides_rider_id_idx').on(t.riderId, t.createdAt),
     index('rides_driver_id_idx').on(t.driverId, t.createdAt),
+    index('rides_company_id_idx').on(t.companyId),
   ],
 );
 
@@ -133,8 +177,15 @@ export const payments = pgTable(
   'payments',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    rideId: uuid('ride_id').notNull().references(() => rides.id),
-    riderId: uuid('rider_id').notNull().references(() => riders.id),
+    companyId: uuid('company_id')
+      .notNull()
+      .references(() => companies.id),
+    rideId: uuid('ride_id')
+      .notNull()
+      .references(() => rides.id),
+    riderId: uuid('rider_id')
+      .notNull()
+      .references(() => riders.id),
     amount: numeric('amount', { precision: 10, scale: 2 }).notNull(),
     currency: char('currency', { length: 3 }).notNull().default('USD'),
     status: paymentStatusEnum('status').notNull().default('pending'),
@@ -148,13 +199,13 @@ export const payments = pgTable(
     index('payments_ride_id_idx').on(t.rideId),
     index('payments_rider_id_idx').on(t.riderId),
     index('payments_status_idx').on(t.status),
+    index('payments_company_id_idx').on(t.companyId),
   ],
 );
 
-export const adminRoleEnum = pgEnum('admin_role', ['super_admin', 'dispatcher', 'viewer']);
-
 export const admins = pgTable('admins', {
   id: uuid('id').primaryKey().defaultRandom(),
+  companyId: uuid('company_id').references(() => companies.id),
   fullName: text('full_name').notNull(),
   email: text('email').notNull().unique(),
   passwordHash: text('password_hash').notNull(),

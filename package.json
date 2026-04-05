@@ -10,6 +10,7 @@
     "test": "pnpm -r --if-present run test",
     "db:generate": "pnpm --filter @rockland-taxi/db generate",
     "db:migrate": "pnpm --filter @rockland-taxi/db migrate",
+    "db:seed": "pnpm --filter @rockland-taxi/db seed",
     "lint": "eslint . --ext .ts,.tsx --ignore-path .gitignore",
     "type-check": "tsc --noEmit",
     "prepare": "husky"

@@ -2,22 +2,44 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { db, schema } from '@rockland-taxi/db';
 import { eq, desc, count, and, inArray } from 'drizzle-orm';
-import { requireAdmin } from '../middleware/auth.js';
+import { requireAdmin, getCompanyId } from '../middleware/auth.js';
 
 export async function adminRoutes(app: FastifyInstance) {
-  // GET /admin/dashboard — summary stats
-  app.get('/admin/dashboard', { preHandler: requireAdmin }, async () => {
-    const [totalDrivers] = await db.select({ count: count() }).from(schema.drivers);
+  // GET /admin/dashboard — summary stats (company-scoped)
+  app.get('/admin/dashboard', { preHandler: requireAdmin }, async (request) => {
+    const companyId = getCompanyId(request);
+
+    const driverWhere = companyId ? eq(schema.drivers.companyId, companyId) : undefined;
+    const activeDriverWhere = companyId
+      ? and(
+          eq(schema.drivers.isAvailable, true),
+          eq(schema.drivers.isActive, true),
+          eq(schema.drivers.companyId, companyId),
+        )
+      : and(eq(schema.drivers.isAvailable, true), eq(schema.drivers.isActive, true));
+    const riderWhere = companyId ? eq(schema.riders.companyId, companyId) : undefined;
+    const rideWhere = companyId ? eq(schema.rides.companyId, companyId) : undefined;
+    const pendingWhere = companyId
+      ? and(
+          inArray(schema.rides.status, ['requested', 'accepted', 'in_progress']),
+          eq(schema.rides.companyId, companyId),
+        )
+      : inArray(schema.rides.status, ['requested', 'accepted', 'in_progress']);
+
+    const [totalDrivers] = await db
+      .select({ count: count() })
+      .from(schema.drivers)
+      .where(driverWhere);
     const [activeDrivers] = await db
       .select({ count: count() })
       .from(schema.drivers)
-      .where(and(eq(schema.drivers.isAvailable, true), eq(schema.drivers.isActive, true)));
-    const [totalRiders] = await db.select({ count: count() }).from(schema.riders);
-    const [totalRides] = await db.select({ count: count() }).from(schema.rides);
+      .where(activeDriverWhere);
+    const [totalRiders] = await db.select({ count: count() }).from(schema.riders).where(riderWhere);
+    const [totalRides] = await db.select({ count: count() }).from(schema.rides).where(rideWhere);
     const [pendingRides] = await db
       .select({ count: count() })
       .from(schema.rides)
-      .where(inArray(schema.rides.status, ['requested', 'accepted', 'in_progress']));
+      .where(pendingWhere);
 
     return {
       totalDrivers: totalDrivers.count,
@@ -28,15 +50,18 @@ export async function adminRoutes(app: FastifyInstance) {
     };
   });
 
-  // GET /admin/drivers — list all drivers
+  // GET /admin/drivers — list drivers (company-scoped)
   app.get('/admin/drivers', { preHandler: requireAdmin }, async (request) => {
+    const companyId = getCompanyId(request);
     const { status } = (request.query as { status?: string }) ?? {};
-    let where;
-    if (status === 'active') where = eq(schema.drivers.isActive, true);
-    else if (status === 'suspended') where = eq(schema.drivers.isActive, false);
+
+    const conditions = [];
+    if (companyId) conditions.push(eq(schema.drivers.companyId, companyId));
+    if (status === 'active') conditions.push(eq(schema.drivers.isActive, true));
+    else if (status === 'suspended') conditions.push(eq(schema.drivers.isActive, false));
 
     return db.query.drivers.findMany({
-      where,
+      where: conditions.length > 0 ? and(...conditions) : undefined,
       columns: { passwordHash: false },
       orderBy: [desc(schema.drivers.createdAt)],
     });
@@ -45,37 +70,62 @@ export async function adminRoutes(app: FastifyInstance) {
   // PATCH /admin/drivers/:id — approve or suspend
   app.patch('/admin/drivers/:id', { preHandler: requireAdmin }, async (request, reply) => {
     const { id } = request.params as { id: string };
+    const companyId = getCompanyId(request);
     const body = z.object({ isActive: z.boolean() }).parse(request.body);
+
+    const conditions = [eq(schema.drivers.id, id)];
+    if (companyId) conditions.push(eq(schema.drivers.companyId, companyId));
 
     const [updated] = await db
       .update(schema.drivers)
       .set({ isActive: body.isActive, updatedAt: new Date() })
-      .where(eq(schema.drivers.id, id))
+      .where(and(...conditions))
       .returning({ id: schema.drivers.id, isActive: schema.drivers.isActive });
 
     if (!updated) return reply.code(404).send({ error: 'Driver not found' });
     return updated;
   });
 
-  // GET /admin/rides — list all rides with optional status filter
+  // GET /admin/rides — list rides (company-scoped)
   app.get('/admin/rides', { preHandler: requireAdmin }, async (request) => {
-    const { status, limit = '50', offset = '0' } = request.query as {
+    const companyId = getCompanyId(request);
+    const {
+      status,
+      limit = '50',
+      offset = '0',
+    } = request.query as {
       status?: string;
       limit?: string;
       offset?: string;
     };
 
-    const validStatuses = ['requested', 'accepted', 'arrived', 'in_progress', 'completed', 'cancelled'];
-    const where =
-      status && validStatuses.includes(status)
-        ? eq(
-            schema.rides.status,
-            status as 'requested' | 'accepted' | 'arrived' | 'in_progress' | 'completed' | 'cancelled',
-          )
-        : undefined;
+    const validStatuses = [
+      'requested',
+      'accepted',
+      'arrived',
+      'in_progress',
+      'completed',
+      'cancelled',
+    ];
+    const conditions = [];
+    if (companyId) conditions.push(eq(schema.rides.companyId, companyId));
+    if (status && validStatuses.includes(status)) {
+      conditions.push(
+        eq(
+          schema.rides.status,
+          status as
+            | 'requested'
+            | 'accepted'
+            | 'arrived'
+            | 'in_progress'
+            | 'completed'
+            | 'cancelled',
+        ),
+      );
+    }
 
     return db.query.rides.findMany({
-      where,
+      where: conditions.length > 0 ? and(...conditions) : undefined,
       orderBy: [desc(schema.rides.createdAt)],
       limit: Math.min(Number(limit), 200),
       offset: Number(offset),
@@ -85,22 +135,38 @@ export async function adminRoutes(app: FastifyInstance) {
   // POST /admin/rides/:id/dispatch — manually assign a driver to a ride
   app.post('/admin/rides/:id/dispatch', { preHandler: requireAdmin }, async (request, reply) => {
     const { id } = request.params as { id: string };
+    const companyId = getCompanyId(request);
     const body = z.object({ driverId: z.string().uuid() }).parse(request.body);
 
-    const ride = await db.query.rides.findFirst({ where: eq(schema.rides.id, id) });
+    const rideConditions = [eq(schema.rides.id, id)];
+    if (companyId) rideConditions.push(eq(schema.rides.companyId, companyId));
+
+    const ride = await db.query.rides.findFirst({ where: and(...rideConditions) });
     if (!ride) return reply.code(404).send({ error: 'Ride not found' });
     if (!['requested', 'accepted'].includes(ride.status)) {
       return reply.code(409).send({ error: 'Ride cannot be dispatched in current state' });
     }
 
+    // Driver must belong to the same company as the ride
+    const driverConditions = [
+      eq(schema.drivers.id, body.driverId),
+      eq(schema.drivers.isActive, true),
+    ];
+    driverConditions.push(eq(schema.drivers.companyId, ride.companyId));
+
     const driver = await db.query.drivers.findFirst({
-      where: and(eq(schema.drivers.id, body.driverId), eq(schema.drivers.isActive, true)),
+      where: and(...driverConditions),
     });
     if (!driver) return reply.code(404).send({ error: 'Driver not found or inactive' });
 
     const [updated] = await db
       .update(schema.rides)
-      .set({ driverId: body.driverId, status: 'accepted', acceptedAt: new Date(), updatedAt: new Date() })
+      .set({
+        driverId: body.driverId,
+        status: 'accepted',
+        acceptedAt: new Date(),
+        updatedAt: new Date(),
+      })
       .where(eq(schema.rides.id, id))
       .returning();
 
@@ -112,10 +178,15 @@ export async function adminRoutes(app: FastifyInstance) {
     return updated;
   });
 
-  // GET /admin/drivers/live — active driver locations for map
-  app.get('/admin/drivers/live', { preHandler: requireAdmin }, async () => {
+  // GET /admin/drivers/live — active driver locations for map (company-scoped)
+  app.get('/admin/drivers/live', { preHandler: requireAdmin }, async (request) => {
+    const companyId = getCompanyId(request);
+
+    const conditions = [eq(schema.drivers.isActive, true), eq(schema.drivers.isAvailable, true)];
+    if (companyId) conditions.push(eq(schema.drivers.companyId, companyId));
+
     return db.query.drivers.findMany({
-      where: and(eq(schema.drivers.isActive, true), eq(schema.drivers.isAvailable, true)),
+      where: and(...conditions),
       columns: {
         id: true,
         fullName: true,

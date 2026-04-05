@@ -2,7 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { db, schema } from '@rockland-taxi/db';
 import { eq, and, desc } from 'drizzle-orm';
-import { requireRider, requireDriver, requireAuth } from '../middleware/auth.js';
+import { requireRider, requireDriver, requireAuth, getCompanyId } from '../middleware/auth.js';
 import { estimateFare } from '../services/fare.js';
 
 const requestRideSchema = z.object({
@@ -21,7 +21,7 @@ const cancelRideSchema = z.object({
 export async function rideRoutes(app: FastifyInstance) {
   // POST /rides — rider requests a ride
   app.post('/rides', { preHandler: requireRider }, async (request, reply) => {
-    const user = request.user as { sub: string };
+    const user = request.user as { sub: string; companyId: string };
     const body = requestRideSchema.parse(request.body);
 
     const { distanceKm, durationMin, fareUsd } = estimateFare(
@@ -34,6 +34,7 @@ export async function rideRoutes(app: FastifyInstance) {
     const [ride] = await db
       .insert(schema.rides)
       .values({
+        companyId: user.companyId,
         riderId: user.sub,
         pickupLat: body.pickupLat,
         pickupLng: body.pickupLng,
@@ -53,14 +54,21 @@ export async function rideRoutes(app: FastifyInstance) {
 
   // GET /rides — list caller's rides
   app.get('/rides', { preHandler: requireAuth }, async (request) => {
-    const user = request.user as { sub: string; role: string };
-    const where =
+    const user = request.user as { sub: string; role: string; companyId?: string };
+
+    const conditions = [
       user.role === 'rider'
         ? eq(schema.rides.riderId, user.sub)
-        : eq(schema.rides.driverId, user.sub);
+        : eq(schema.rides.driverId, user.sub),
+    ];
+
+    // Company scope for non-admins
+    if (user.companyId) {
+      conditions.push(eq(schema.rides.companyId, user.companyId));
+    }
 
     return db.query.rides.findMany({
-      where,
+      where: and(...conditions),
       orderBy: [desc(schema.rides.createdAt)],
       limit: 50,
     });
@@ -69,13 +77,18 @@ export async function rideRoutes(app: FastifyInstance) {
   // GET /rides/:id — get a single ride (ownership enforced for riders/drivers)
   app.get('/rides/:id', { preHandler: requireAuth }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const user = request.user as { sub: string; role: string };
+    const user = request.user as { sub: string; role: string; companyId?: string };
     const ride = await db.query.rides.findFirst({
       where: eq(schema.rides.id, id),
     });
     if (!ride) return reply.code(404).send({ error: 'Ride not found' });
 
-    // Admins can see any ride; riders/drivers can only see their own
+    // Company scope check
+    if (user.companyId && ride.companyId !== user.companyId) {
+      return reply.code(403).send({ error: 'Forbidden' });
+    }
+
+    // Admins can see any ride within their company; riders/drivers can only see their own
     if (user.role !== 'admin') {
       const isOwner = ride.riderId === user.sub || ride.driverId === user.sub;
       if (!isOwner) return reply.code(403).send({ error: 'Forbidden' });
@@ -87,7 +100,7 @@ export async function rideRoutes(app: FastifyInstance) {
   // POST /rides/:id/accept — driver accepts a ride
   app.post('/rides/:id/accept', { preHandler: requireDriver }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const user = request.user as { sub: string };
+    const user = request.user as { sub: string; companyId: string };
 
     const [updated] = await db
       .update(schema.rides)
@@ -97,7 +110,13 @@ export async function rideRoutes(app: FastifyInstance) {
         acceptedAt: new Date(),
         updatedAt: new Date(),
       })
-      .where(and(eq(schema.rides.id, id), eq(schema.rides.status, 'requested')))
+      .where(
+        and(
+          eq(schema.rides.id, id),
+          eq(schema.rides.status, 'requested'),
+          eq(schema.rides.companyId, user.companyId),
+        ),
+      )
       .returning();
 
     if (!updated) {
@@ -116,7 +135,7 @@ export async function rideRoutes(app: FastifyInstance) {
   // POST /rides/:id/start — driver starts the ride (picked up rider)
   app.post('/rides/:id/start', { preHandler: requireDriver }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const user = request.user as { sub: string };
+    const user = request.user as { sub: string; companyId: string };
 
     const [updated] = await db
       .update(schema.rides)
@@ -130,6 +149,7 @@ export async function rideRoutes(app: FastifyInstance) {
           eq(schema.rides.id, id),
           eq(schema.rides.driverId, user.sub),
           eq(schema.rides.status, 'accepted'),
+          eq(schema.rides.companyId, user.companyId),
         ),
       )
       .returning();
@@ -144,13 +164,14 @@ export async function rideRoutes(app: FastifyInstance) {
   // POST /rides/:id/complete — driver completes the ride
   app.post('/rides/:id/complete', { preHandler: requireDriver }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const user = request.user as { sub: string };
+    const user = request.user as { sub: string; companyId: string };
 
     const ride = await db.query.rides.findFirst({
       where: and(
         eq(schema.rides.id, id),
         eq(schema.rides.driverId, user.sub),
         eq(schema.rides.status, 'in_progress'),
+        eq(schema.rides.companyId, user.companyId),
       ),
     });
     if (!ride) {
@@ -176,6 +197,7 @@ export async function rideRoutes(app: FastifyInstance) {
 
     // Create payment record
     await db.insert(schema.payments).values({
+      companyId: user.companyId,
       rideId: id,
       riderId: ride.riderId,
       amount: ride.fareEstimate ?? '0.00',
@@ -189,10 +211,15 @@ export async function rideRoutes(app: FastifyInstance) {
   // POST /rides/:id/cancel — rider or driver cancels a ride
   app.post('/rides/:id/cancel', { preHandler: requireAuth }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const user = request.user as { sub: string; role: string };
+    const user = request.user as { sub: string; role: string; companyId?: string };
     const body = cancelRideSchema.parse(request.body ?? {});
 
-    const ride = await db.query.rides.findFirst({ where: eq(schema.rides.id, id) });
+    const conditions = [eq(schema.rides.id, id)];
+    if (user.companyId) {
+      conditions.push(eq(schema.rides.companyId, user.companyId));
+    }
+
+    const ride = await db.query.rides.findFirst({ where: and(...conditions) });
     if (!ride) return reply.code(404).send({ error: 'Ride not found' });
 
     // Only the rider or the assigned driver may cancel

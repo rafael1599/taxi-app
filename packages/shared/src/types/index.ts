@@ -6,15 +6,25 @@ export type RideStatus =
   | 'completed'
   | 'cancelled';
 
-export type PaymentStatus =
-  | 'pending'
-  | 'authorized'
-  | 'captured'
-  | 'refunded'
-  | 'failed';
+export type PaymentStatus = 'pending' | 'authorized' | 'captured' | 'refunded' | 'failed';
+
+export type AdminRole = 'super_admin' | 'dispatcher' | 'viewer' | 'platform_admin';
+
+export interface Company {
+  id: string;
+  name: string;
+  slug: string;
+  logo: string | null;
+  whatsappJid: string | null;
+  isActive: boolean;
+  settings: Record<string, unknown>;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 export interface Rider {
   id: string;
+  companyId: string;
   fullName: string;
   phone: string;
   email: string;
@@ -27,6 +37,7 @@ export interface Rider {
 
 export interface Driver {
   id: string;
+  companyId: string;
   fullName: string;
   phone: string;
   email: string;
@@ -44,6 +55,7 @@ export interface Driver {
 
 export interface Vehicle {
   id: string;
+  companyId: string;
   driverId: string;
   make: string;
   model: string;
@@ -56,6 +68,7 @@ export interface Vehicle {
 
 export interface Ride {
   id: string;
+  companyId: string;
   riderId: string;
   driverId: string | null;
   vehicleId: string | null;
@@ -82,6 +95,7 @@ export interface Ride {
 
 export interface Payment {
   id: string;
+  companyId: string;
   rideId: string;
   riderId: string;
   amount: string;
@@ -103,9 +117,10 @@ export interface DriverLocation {
 
 export interface Admin {
   id: string;
+  companyId: string | null;
   fullName: string;
   email: string;
-  role: 'super_admin' | 'dispatcher' | 'viewer';
+  role: AdminRole;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -114,7 +129,8 @@ export interface Admin {
 export interface JwtPayload {
   sub: string;
   role: 'driver' | 'rider' | 'admin';
-  adminRole?: 'super_admin' | 'dispatcher' | 'viewer';
+  companyId?: string;
+  adminRole?: AdminRole;
   iat: number;
   exp: number;
 }
