@@ -1,5 +1,5 @@
 import { db, schema } from '@rockland-taxi/db';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, lt } from 'drizzle-orm';
 
 export interface NearbyDriver {
   id: string;
@@ -37,6 +37,7 @@ export async function findNearbyDrivers(
       AND d.is_active = TRUE
       AND d.current_lat IS NOT NULL
       AND d.current_lng IS NOT NULL
+      AND d.location_at > NOW() - INTERVAL '60 seconds'
       ${companyFilter}
       AND ST_DWithin(
         ST_SetSRID(ST_MakePoint(d.current_lng, d.current_lat), 4326)::geography,
@@ -64,11 +65,47 @@ export async function findNearbyDrivers(
   }));
 }
 
+const MIN_DISTANCE_METERS = 10; // Ignore updates closer than this (GPS noise)
+
+function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 export async function updateDriverLocation(
   driverId: string,
   lat: number,
   lng: number,
-): Promise<void> {
+  accuracy?: number,
+): Promise<{ updated: boolean }> {
+  // Client-side accuracy filter: discard low-quality readings
+  if (accuracy !== undefined && accuracy > 100) {
+    return { updated: false };
+  }
+
+  // Server-side jitter filter: skip if driver barely moved
+  const driver = await db.query.drivers.findFirst({
+    where: eq(schema.drivers.id, driverId),
+    columns: { currentLat: true, currentLng: true },
+  });
+
+  if (driver?.currentLat != null && driver?.currentLng != null) {
+    const dist = haversineMeters(driver.currentLat, driver.currentLng, lat, lng);
+    if (dist < MIN_DISTANCE_METERS) {
+      // Still update locationAt to keep the driver "alive" for stale detection
+      await db
+        .update(schema.drivers)
+        .set({ locationAt: new Date() })
+        .where(eq(schema.drivers.id, driverId));
+      return { updated: false };
+    }
+  }
+
   await db
     .update(schema.drivers)
     .set({
@@ -78,4 +115,43 @@ export async function updateDriverLocation(
       updatedAt: new Date(),
     })
     .where(eq(schema.drivers.id, driverId));
+
+  return { updated: true };
+}
+
+// ── Stale Location Detection ────────────────────────────────────────────────
+
+const STALE_THRESHOLD_SEC = 180; // 3 minutes no GPS update → set offline
+
+/**
+ * Find online drivers whose location hasn't been updated in STALE_THRESHOLD_SEC
+ * and set them offline. Run this periodically via BullMQ repeating job.
+ */
+export async function markStaleDriversOffline(): Promise<number> {
+  const cutoff = new Date(Date.now() - STALE_THRESHOLD_SEC * 1000);
+
+  const staleDrivers = await db
+    .update(schema.drivers)
+    .set({
+      status: 'offline',
+      isAvailable: false,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(schema.drivers.isAvailable, true),
+        sql`${schema.drivers.locationAt} IS NOT NULL`,
+        lt(schema.drivers.locationAt, cutoff),
+      ),
+    )
+    .returning({ id: schema.drivers.id });
+
+  if (staleDrivers.length > 0) {
+    console.log(
+      `[Dispatch] Marked ${staleDrivers.length} stale driver(s) offline:`,
+      staleDrivers.map((d) => d.id),
+    );
+  }
+
+  return staleDrivers.length;
 }

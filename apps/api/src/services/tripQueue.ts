@@ -150,6 +150,54 @@ export function initTripWorker(): Worker<TripJobData> {
   return worker;
 }
 
+// ── Maintenance Queue (stale driver detection) ──────────────────────────────
+
+const MAINT_QUEUE_NAME = 'driver-maintenance';
+let maintQueue: Queue | null = null;
+let maintWorker: Worker | null = null;
+
+export function initMaintenanceWorker(): void {
+  if (maintWorker) return;
+
+  const connection = createRedisConnection();
+
+  maintQueue = new Queue(MAINT_QUEUE_NAME, {
+    connection: getRedis(),
+    defaultJobOptions: {
+      removeOnComplete: { count: 100 },
+      removeOnFail: { count: 50 },
+    },
+  });
+
+  // Add repeating job: run every 30 seconds
+  maintQueue
+    .add(
+      'stale_check',
+      {},
+      {
+        repeat: { every: 30_000 },
+        jobId: 'stale-driver-check',
+      },
+    )
+    .catch(console.error);
+
+  maintWorker = new Worker(
+    MAINT_QUEUE_NAME,
+    async () => {
+      // Lazy import to avoid circular deps
+      const { markStaleDriversOffline } = await import('./dispatch.js');
+      await markStaleDriversOffline();
+    },
+    { connection, concurrency: 1 },
+  );
+
+  maintWorker.on('error', (err) => {
+    console.error('[Maintenance] Worker error:', err.message);
+  });
+
+  console.log('[Maintenance] Stale driver check worker started (every 30s)');
+}
+
 export async function closeTripQueue(): Promise<void> {
   if (worker) {
     await worker.close();
@@ -158,5 +206,13 @@ export async function closeTripQueue(): Promise<void> {
   if (queue) {
     await queue.close();
     queue = null;
+  }
+  if (maintWorker) {
+    await maintWorker.close();
+    maintWorker = null;
+  }
+  if (maintQueue) {
+    await maintQueue.close();
+    maintQueue = null;
   }
 }

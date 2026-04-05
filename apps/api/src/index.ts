@@ -7,7 +7,7 @@ import fastifyWebsocket from '@fastify/websocket';
 
 import { sql } from 'drizzle-orm';
 import { getRedis, closeRedis } from './services/redis.js';
-import { initTripWorker, closeTripQueue } from './services/tripQueue.js';
+import { initTripWorker, initMaintenanceWorker, closeTripQueue } from './services/tripQueue.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { authRoutes } from './routes/auth.js';
 import { rideRoutes } from './routes/rides.js';
@@ -123,8 +123,9 @@ export async function buildApp() {
 
   // Initialize Redis-backed services after server is ready
   app.addHook('onReady', async () => {
-    // Start BullMQ worker for trip dispatch jobs
+    // Start BullMQ workers
     initTripWorker();
+    initMaintenanceWorker();
 
     // Initialize WhatsApp sessions
     initWhatsAppSessions().catch((err) => {

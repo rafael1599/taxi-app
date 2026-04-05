@@ -9,6 +9,7 @@ import { saveDriverPushToken } from '../services/pushNotifications.js';
 const locationSchema = z.object({
   lat: z.number().min(-90).max(90),
   lng: z.number().min(-180).max(180),
+  accuracy: z.number().optional(),
 });
 
 const availabilitySchema = z.object({
@@ -29,9 +30,9 @@ export async function driverRoutes(app: FastifyInstance) {
   // PATCH /drivers/me/location — update GPS position
   app.patch('/drivers/me/location', { preHandler: requireDriver }, async (request) => {
     const user = request.user as { sub: string };
-    const { lat, lng } = locationSchema.parse(request.body);
-    await updateDriverLocation(user.sub, lat, lng);
-    return { ok: true };
+    const { lat, lng, accuracy } = locationSchema.parse(request.body);
+    const result = await updateDriverLocation(user.sub, lat, lng, accuracy);
+    return { ok: true, ...result };
   });
 
   // PATCH /drivers/me/availability — toggle online/offline
