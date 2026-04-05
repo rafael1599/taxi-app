@@ -32,6 +32,12 @@ Thumbs.db
 coverage/
 .nyc_output/
 
+# Test build artifacts
+apps/api/test/**/*.js
+apps/api/test/**/*.js.map
+apps/api/test/**/*.d.ts
+apps/api/test/**/*.d.ts.map
+
 # Expo
 ios/
 android/
