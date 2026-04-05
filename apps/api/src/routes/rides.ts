@@ -6,6 +6,7 @@ import { requireRider, requireDriver, requireAuth, getCompanyId } from '../middl
 import { estimateFare } from '../services/fare.js';
 import { startDriverSearch } from '../services/tripLifecycle.js';
 import { dispatchToNearestDriver } from '../services/dispatch.js';
+import { broadcastToRide } from '../ws/rooms.js';
 
 const requestRideSchema = z.object({
   pickupLat: z.number().min(-90).max(90),
@@ -138,6 +139,7 @@ export async function rideRoutes(app: FastifyInstance) {
       .set({ isAvailable: false, updatedAt: new Date() })
       .where(eq(schema.drivers.id, user.sub));
 
+    broadcastToRide(id, { type: 'ride_status_change', status: 'accepted', rideId: id });
     return updated;
   });
 
@@ -179,6 +181,10 @@ export async function rideRoutes(app: FastifyInstance) {
       ride.companyId ?? undefined,
     );
 
+    if (next) {
+      broadcastToRide(id, { type: 'driver_assigned', driverId: next.id, rideId: id });
+    }
+
     return reply.send({
       message: next ? `Re-dispatched to next available driver` : 'No drivers available nearby',
       nextDriverId: next?.id ?? null,
@@ -211,6 +217,7 @@ export async function rideRoutes(app: FastifyInstance) {
       return reply.code(409).send({ error: 'Cannot start ride in current state' });
     }
 
+    broadcastToRide(id, { type: 'ride_status_change', status: 'in_progress', rideId: id });
     return updated;
   });
 
@@ -258,6 +265,7 @@ export async function rideRoutes(app: FastifyInstance) {
       status: 'pending',
     });
 
+    broadcastToRide(id, { type: 'ride_status_change', status: 'completed', rideId: id });
     return updated;
   });
 
@@ -305,6 +313,7 @@ export async function rideRoutes(app: FastifyInstance) {
         .where(eq(schema.drivers.id, ride.driverId));
     }
 
+    broadcastToRide(id, { type: 'ride_status_change', status: 'cancelled', rideId: id });
     return updated;
   });
 }
