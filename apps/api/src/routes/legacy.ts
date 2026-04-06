@@ -1,29 +1,41 @@
 import type { FastifyInstance } from 'fastify';
-import { supabaseQuery } from '@drivly/db';
-import { requireAdmin } from '../middleware/auth.js';
+import { supabaseQuery, db, schema } from '@drivly/db';
+import { eq } from 'drizzle-orm';
+import { requireAdmin, getCompanyId, requireCompanyScope } from '../middleware/auth.js';
 
 /**
  * Legacy data routes — reads from Supabase (Control de Horas DB).
  * All routes require admin auth. Prefix: /api/v1/legacy
+ *
+ * Phase 2: /legacy/drivers and /legacy/price-overrides now read from LOCAL DB.
+ * Phase 3 will migrate: employees, time-entries, stats.
  */
 export async function legacyRoutes(app: FastifyInstance) {
-  // ── Drivers ────────────────────────────────────────────────────────────────
+  // ── Drivers (MIGRATED to local DB — Phase 2) ──────────────────────────────
   app.get(
     '/legacy/drivers',
-    { preHandler: requireAdmin, schema: { tags: ['Legacy'] } },
-    async (_request, reply) => {
-      const drivers = await supabaseQuery(`
-        SELECT
-          d.id, d.name, d.phone, d.plate, d.vehicle,
-          d."isActive", d."isOnline",
-          d."lastLocationLat", d."lastLocationLng", d."lastLocationAt",
-          d."createdAt", d."updatedAt",
-          c.company_name AS "companyName"
-        FROM "Driver" d
-        LEFT JOIN "Company" c ON c.id = d."companyId"
-        ORDER BY d.name
-      `);
-      return reply.send(drivers);
+    { preHandler: [requireAdmin, requireCompanyScope], schema: { tags: ['Legacy'] } },
+    async (request, reply) => {
+      const companyId = getCompanyId(request)!;
+      const allDrivers = await db
+        .select({
+          id: schema.drivers.id,
+          name: schema.drivers.fullName,
+          phone: schema.drivers.phone,
+          isActive: schema.drivers.isActive,
+          isAvailable: schema.drivers.isAvailable,
+          status: schema.drivers.status,
+          currentLat: schema.drivers.currentLat,
+          currentLng: schema.drivers.currentLng,
+          locationAt: schema.drivers.locationAt,
+          createdAt: schema.drivers.createdAt,
+          updatedAt: schema.drivers.updatedAt,
+          legacySupabaseId: schema.drivers.legacySupabaseId,
+        })
+        .from(schema.drivers)
+        .where(eq(schema.drivers.companyId, companyId))
+        .orderBy(schema.drivers.fullName);
+      return reply.send(allDrivers);
     },
   );
 
@@ -72,33 +84,43 @@ export async function legacyRoutes(app: FastifyInstance) {
     },
   );
 
-  // ── Price Overrides (Fixed Routes) ─────────────────────────────────────────
+  // ── Price Overrides (MIGRATED to local fixed_routes — Phase 2) ──────────────
   app.get(
     '/legacy/price-overrides',
-    { preHandler: requireAdmin, schema: { tags: ['Legacy'] } },
+    { preHandler: [requireAdmin, requireCompanyScope], schema: { tags: ['Legacy'] } },
     async (request, reply) => {
+      const companyId = getCompanyId(request)!;
       const { active } = request.query as Record<string, string>;
-      let whereClause = '';
-      const params: unknown[] = [];
+
+      let rows = await db
+        .select()
+        .from(schema.fixedRoutes)
+        .where(eq(schema.fixedRoutes.companyId, companyId))
+        .orderBy(schema.fixedRoutes.name);
+
       if (active === 'true') {
-        whereClause = 'WHERE p."isActive" = true';
+        rows = rows.filter((r) => r.isActive);
       } else if (active === 'false') {
-        whereClause = 'WHERE p."isActive" = false';
+        rows = rows.filter((r) => !r.isActive);
       }
 
-      const overrides = await supabaseQuery(
-        `
-        SELECT
-          p.id, p."originLabel", p."destLabel",
-          p."originLat", p."originLng", p."destLat", p."destLng",
-          p.price, p."radiusMiles", p."isActive", p.note,
-          p."createdAt", p."updatedAt"
-        FROM "PriceOverride" p
-        ${whereClause}
-        ORDER BY p."originLabel", p."destLabel"
-      `,
-        params,
-      );
+      // Map to legacy API shape for backward compatibility
+      const overrides = rows.map((r) => ({
+        id: r.id,
+        originLabel: r.name?.split(' → ')[0] ?? '',
+        destLabel: r.name?.split(' → ')[1] ?? '',
+        originLat: r.originLat,
+        originLng: r.originLng,
+        destLat: r.destLat,
+        destLng: r.destLng,
+        price: Number(r.fixedPrice),
+        radiusMiles: Math.round((r.radiusMeters / 1609.34) * 100) / 100,
+        isActive: r.isActive,
+        note: r.note,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+      }));
+
       return reply.send(overrides);
     },
   );
@@ -232,19 +254,26 @@ export async function legacyRoutes(app: FastifyInstance) {
     },
   );
 
-  // ── Dashboard stats ────────────────────────────────────────────────────────
+  // ── Dashboard stats (hybrid: local DB for drivers/routes, Supabase for rest) ─
   app.get(
     '/legacy/stats',
-    { preHandler: requireAdmin, schema: { tags: ['Legacy'] } },
-    async (_request, reply) => {
-      const [drivers, trips, employees, timeEntries, priceOverrides] = await Promise.all([
-        supabaseQuery<{ total: string; active: string; online: string }>(`
-          SELECT
-            count(*)::text AS total,
-            count(*) FILTER (WHERE "isActive" = true)::text AS active,
-            count(*) FILTER (WHERE "isOnline" = true)::text AS online
-          FROM "Driver"
-        `),
+    { preHandler: [requireAdmin, requireCompanyScope], schema: { tags: ['Legacy'] } },
+    async (request, reply) => {
+      const companyId = getCompanyId(request)!;
+
+      // Local DB queries (drivers + fixed_routes — migrated in Phase 2)
+      const localDrivers = await db
+        .select()
+        .from(schema.drivers)
+        .where(eq(schema.drivers.companyId, companyId));
+
+      const localRoutes = await db
+        .select()
+        .from(schema.fixedRoutes)
+        .where(eq(schema.fixedRoutes.companyId, companyId));
+
+      // Supabase queries (trips, employees, time entries — still in Phase 3)
+      const [trips, employees, timeEntries] = await Promise.all([
         supabaseQuery<{ total: string; completed: string; cancelled: string; revenue: string }>(`
           SELECT
             count(*)::text AS total,
@@ -266,19 +295,13 @@ export async function legacyRoutes(app: FastifyInstance) {
           FROM "TimeEntry"
           WHERE end_time IS NOT NULL
         `),
-        supabaseQuery<{ total: string; active: string }>(`
-          SELECT
-            count(*)::text AS total,
-            count(*) FILTER (WHERE "isActive" = true)::text AS active
-          FROM "PriceOverride"
-        `),
       ]);
 
       return reply.send({
         drivers: {
-          total: Number(drivers[0]?.total ?? 0),
-          active: Number(drivers[0]?.active ?? 0),
-          online: Number(drivers[0]?.online ?? 0),
+          total: localDrivers.length,
+          active: localDrivers.filter((d) => d.isActive).length,
+          available: localDrivers.filter((d) => d.isAvailable).length,
         },
         trips: {
           total: Number(trips[0]?.total ?? 0),
@@ -295,8 +318,8 @@ export async function legacyRoutes(app: FastifyInstance) {
           totalHours: Number(timeEntries[0]?.totalHours ?? 0),
         },
         priceOverrides: {
-          total: Number(priceOverrides[0]?.total ?? 0),
-          active: Number(priceOverrides[0]?.active ?? 0),
+          total: localRoutes.length,
+          active: localRoutes.filter((r) => r.isActive).length,
         },
       });
     },

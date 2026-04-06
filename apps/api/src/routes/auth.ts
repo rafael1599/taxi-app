@@ -4,7 +4,11 @@ import { db, schema } from '@drivly/db';
 import { eq } from 'drizzle-orm';
 import { JWT_EXPIRY_SEC } from '@drivly/shared';
 import bcrypt from 'bcryptjs';
+import { randomBytes } from 'node:crypto';
 import { sendVerificationCode, checkVerificationCode } from '../services/otp.js';
+
+const REFRESH_TOKEN_DAYS = 90;
+const REFRESH_TOKEN_MS = REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000;
 
 const driverLoginSchema = z.object({
   email: z.string().email(),
@@ -159,7 +163,7 @@ export async function authRoutes(app: FastifyInstance) {
     const { phone, channel } = z
       .object({
         phone: z.string().min(10),
-        channel: z.enum(['sms', 'whatsapp']).optional().default('sms'),
+        channel: z.enum(['sms', 'whatsapp']).optional().default('whatsapp'),
       })
       .parse(request.body);
 
@@ -184,6 +188,140 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: result.error ?? 'Invalid code' });
     }
     return { verified: true };
+  });
+
+  // ── Driver OTP Login (Uber-style) ────────────────────────────────────────
+
+  // POST /auth/driver/otp/send — send OTP to driver's phone
+  app.post('/auth/driver/otp/send', { ...authRateLimit }, async (request, reply) => {
+    const { phone } = z.object({ phone: z.string().min(10) }).parse(request.body);
+
+    // Verify driver exists with this phone
+    const driver = await db.query.drivers.findFirst({
+      where: eq(schema.drivers.phone, phone),
+    });
+
+    if (!driver || !driver.isActive) {
+      // Don't reveal whether driver exists (security)
+      return reply.code(200).send({ sent: true });
+    }
+
+    const channel = driver.otpChannel ?? 'whatsapp';
+    const result = await sendVerificationCode(phone, channel);
+    if (!result.success) {
+      return reply.code(400).send({ error: result.error });
+    }
+
+    return { sent: true };
+  });
+
+  // POST /auth/driver/otp/verify — verify OTP → issue JWT + refresh token
+  app.post('/auth/driver/otp/verify', { ...authRateLimit }, async (request, reply) => {
+    const { phone, code } = z
+      .object({
+        phone: z.string().min(10),
+        code: z.string().length(6),
+      })
+      .parse(request.body);
+
+    // Verify the OTP code
+    const otpResult = await checkVerificationCode(phone, code);
+    if (!otpResult.valid) {
+      return reply.code(401).send({ error: otpResult.error ?? 'Invalid code' });
+    }
+
+    // Find the driver
+    const driver = await db.query.drivers.findFirst({
+      where: eq(schema.drivers.phone, phone),
+    });
+
+    if (!driver || !driver.isActive) {
+      return reply.code(401).send({ error: 'Driver not found or inactive' });
+    }
+
+    // Generate refresh token (Uber-style persistent session)
+    const refreshToken = randomBytes(48).toString('base64url');
+    const refreshExpiresAt = new Date(Date.now() + REFRESH_TOKEN_MS);
+
+    // Update driver: mark phone verified, set refresh token, update last login
+    await db
+      .update(schema.drivers)
+      .set({
+        phoneVerified: true,
+        refreshToken,
+        refreshTokenExpiresAt: refreshExpiresAt,
+        lastLoginAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.drivers.id, driver.id));
+
+    // Issue JWT
+    const token = app.jwt.sign(
+      { sub: driver.id, role: 'driver', companyId: driver.companyId },
+      { expiresIn: JWT_EXPIRY_SEC },
+    );
+
+    return {
+      token,
+      refreshToken,
+      refreshExpiresAt: refreshExpiresAt.toISOString(),
+      driverId: driver.id,
+    };
+  });
+
+  // POST /auth/driver/refresh — exchange refresh token for new JWT
+  app.post('/auth/driver/refresh', { ...authRateLimit }, async (request, reply) => {
+    const { refreshToken } = z.object({ refreshToken: z.string().min(1) }).parse(request.body);
+
+    // Find driver by refresh token
+    const driver = await db.query.drivers.findFirst({
+      where: eq(schema.drivers.refreshToken, refreshToken),
+    });
+
+    if (!driver) {
+      return reply.code(401).send({ error: 'Invalid refresh token' });
+    }
+
+    // Check expiration
+    if (!driver.refreshTokenExpiresAt || driver.refreshTokenExpiresAt < new Date()) {
+      // Clear expired token
+      await db
+        .update(schema.drivers)
+        .set({ refreshToken: null, refreshTokenExpiresAt: null })
+        .where(eq(schema.drivers.id, driver.id));
+      return reply.code(401).send({ error: 'Refresh token expired, please login again' });
+    }
+
+    if (!driver.isActive) {
+      return reply.code(401).send({ error: 'Driver account is inactive' });
+    }
+
+    // Rotate refresh token (issue new one, invalidate old)
+    const newRefreshToken = randomBytes(48).toString('base64url');
+    const newRefreshExpiresAt = new Date(Date.now() + REFRESH_TOKEN_MS);
+
+    await db
+      .update(schema.drivers)
+      .set({
+        refreshToken: newRefreshToken,
+        refreshTokenExpiresAt: newRefreshExpiresAt,
+        lastLoginAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.drivers.id, driver.id));
+
+    // Issue new JWT
+    const token = app.jwt.sign(
+      { sub: driver.id, role: 'driver', companyId: driver.companyId },
+      { expiresIn: JWT_EXPIRY_SEC },
+    );
+
+    return {
+      token,
+      refreshToken: newRefreshToken,
+      refreshExpiresAt: newRefreshExpiresAt.toISOString(),
+      driverId: driver.id,
+    };
   });
 }
 
