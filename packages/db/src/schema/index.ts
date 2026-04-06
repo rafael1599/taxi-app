@@ -60,6 +60,7 @@ export const adminRoleEnum = pgEnum('admin_role', [
   'dispatcher',
   'viewer',
   'platform_admin',
+  'company_admin',
 ]);
 
 export const subscriptionStatusEnum = pgEnum('subscription_status', [
@@ -69,6 +70,14 @@ export const subscriptionStatusEnum = pgEnum('subscription_status', [
   'canceled',
   'unpaid',
   'paused',
+]);
+
+export const otpChannelEnum = pgEnum('otp_channel', ['whatsapp', 'sms']);
+
+export const migrationSourceEnum = pgEnum('migration_source', [
+  'legacy',
+  'local',
+  'migration_script',
 ]);
 
 // ── Companies (multi-tenant root) ─────────────────────────────────────────────
@@ -123,7 +132,7 @@ export const drivers = pgTable(
     fullName: text('full_name').notNull(),
     phone: text('phone').notNull().unique(),
     email: text('email').notNull().unique(),
-    passwordHash: text('password_hash').notNull(),
+    passwordHash: text('password_hash'), // nullable: OTP is primary auth for drivers
     licenseNumber: text('license_number').notNull().unique(),
     tlcLicense: text('tlc_license'),
     stripeAccountId: text('stripe_acct'),
@@ -139,6 +148,22 @@ export const drivers = pgTable(
     pushToken: text('push_token'),
     avgRating: numeric('avg_rating', { precision: 3, scale: 2 }),
     totalRatings: integer('total_ratings').notNull().default(0),
+    // OTP authentication (primary method for drivers)
+    phoneVerified: boolean('phone_verified').notNull().default(false),
+    otpCode: text('otp_code'),
+    otpExpiresAt: timestamp('otp_expires_at'),
+    otpChannel: otpChannelEnum('otp_channel'),
+    lastLoginAt: timestamp('last_login_at'),
+    // Persistent session (refresh tokens — Uber-style)
+    refreshToken: text('refresh_token').unique(),
+    refreshTokenExpiresAt: timestamp('refresh_token_expires_at'),
+    // Optional link to employee (future: driver on payroll)
+    employeeId: uuid('employee_id'),
+    // Soft delete with timestamp
+    deactivatedAt: timestamp('deactivated_at'),
+    // Migration tracking
+    legacySupabaseId: text('legacy_supabase_id').unique(),
+    updatedBy: uuid('updated_by'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
@@ -150,6 +175,12 @@ export const drivers = pgTable(
     index('drivers_status_idx')
       .on(t.status)
       .where(sql`${t.status} = 'idle'`),
+    index('drivers_refresh_token_idx')
+      .on(t.refreshToken)
+      .where(sql`${t.refreshToken} IS NOT NULL`),
+    index('drivers_employee_id_idx')
+      .on(t.employeeId)
+      .where(sql`${t.employeeId} IS NOT NULL`),
   ],
 );
 
@@ -345,6 +376,15 @@ export const fixedRoutes = pgTable(
     destGeog: text('dest_geog'),
     radiusMeters: integer('radius_meters').notNull().default(500),
     fixedPrice: numeric('fixed_price', { precision: 8, scale: 2 }).notNull(),
+    // Dynamic pricing preparation (defaults to static/off)
+    isDynamicEnabled: boolean('is_dynamic_enabled').notNull().default(false),
+    basePrice: numeric('base_price', { precision: 8, scale: 2 }),
+    rulesConfig: jsonb('rules_config').notNull().default({}),
+    // Operational metadata
+    note: text('note'),
+    isActive: boolean('is_active').notNull().default(true),
+    // Migration tracking
+    legacySupabaseId: text('legacy_supabase_id').unique(),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
@@ -451,6 +491,75 @@ export const admins = pgTable('admins', {
   passwordHash: text('password_hash').notNull(),
   role: adminRoleEnum('role').notNull().default('viewer'),
   isActive: boolean('is_active').notNull().default(true),
+  // Migration tracking
+  legacySupabaseId: text('legacy_supabase_id').unique(),
+  updatedBy: uuid('updated_by'),
+  migrationSource: migrationSourceEnum('migration_source'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
+
+// ── Employees (HR / office staff — dispatchers, admin personnel) ─────────────
+
+export const employees = pgTable(
+  'employees',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    companyId: uuid('company_id')
+      .notNull()
+      .references(() => companies.id),
+    adminId: uuid('admin_id').references(() => admins.id),
+    employeeCode: text('employee_code'),
+    fullName: text('full_name').notNull(),
+    hourlyRate: numeric('hourly_rate', { precision: 8, scale: 2 }).notNull().default('0'),
+    isActive: boolean('is_active').notNull().default(true),
+    deactivatedAt: timestamp('deactivated_at'),
+    // Migration tracking
+    legacySupabaseId: text('legacy_supabase_id').unique(),
+    updatedBy: uuid('updated_by'),
+    migrationSource: migrationSourceEnum('migration_source'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    index('employees_company_id_idx').on(t.companyId),
+    index('employees_admin_id_idx')
+      .on(t.adminId)
+      .where(sql`${t.adminId} IS NOT NULL`),
+    index('employees_active_idx')
+      .on(t.companyId, t.isActive)
+      .where(sql`${t.isActive} = true`),
+  ],
+);
+
+// ── Time Entries (hour tracking — payroll, immutable history) ─────────────────
+
+export const timeEntries = pgTable(
+  'time_entries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    companyId: uuid('company_id')
+      .notNull()
+      .references(() => companies.id),
+    // ON DELETE RESTRICT: never cascade-delete time entries.
+    // HR/payroll data must be immutable for audits and labor compliance.
+    employeeId: uuid('employee_id')
+      .notNull()
+      .references(() => employees.id, { onDelete: 'restrict' }),
+    startTime: timestamp('start_time').notNull(),
+    endTime: timestamp('end_time'),
+    notes: text('notes'),
+    // Migration tracking
+    legacySupabaseId: text('legacy_supabase_id').unique(),
+    updatedBy: uuid('updated_by'),
+    migrationSource: migrationSourceEnum('migration_source'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    index('time_entries_company_id_idx').on(t.companyId),
+    index('time_entries_employee_id_idx').on(t.employeeId),
+    index('time_entries_date_range_idx').on(t.employeeId, t.startTime),
+    index('time_entries_company_period_idx').on(t.companyId, t.startTime),
+  ],
+);

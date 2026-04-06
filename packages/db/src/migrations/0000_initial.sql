@@ -1,3 +1,6 @@
+-- Enable pgcrypto (required for gen_random_uuid() on PostgreSQL < 13)
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 -- Enable PostGIS
 CREATE EXTENSION IF NOT EXISTS postgis;
 
