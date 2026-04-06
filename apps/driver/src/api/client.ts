@@ -1,11 +1,46 @@
 import axios from 'axios';
+import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { useAuthStore } from '../store/authStore';
 
-const BASE_URL =
+// ── API URL Resolution ─────────────────────────────────────────────────────
+// Priority: expoConfig.extra.apiBaseUrl (from app.config.ts) → fallback
+// On Android emulator: localhost → 10.0.2.2 (only in dev mode)
+// On real device: must use actual LAN IP, never localhost
+const configUrl =
   (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined) ?? 'http://localhost:3000';
 
+function resolveBaseUrl(url: string): string {
+  if (!url.includes('localhost')) return url; // Already an IP — use as-is
+
+  if (Platform.OS === 'android') {
+    // __DEV__ = true when running from Metro (dev builds)
+    // __DEV__ = false in release APKs
+    if (__DEV__) {
+      // Emulator or dev device connected to Metro — use 10.0.2.2
+      return url.replace('localhost', '10.0.2.2');
+    }
+    // Release build on real device — localhost won't work
+    // Fall back to the Metro dev server host IP if available
+    const devServerHost = Constants.expoConfig?.hostUri?.split(':')[0];
+    if (devServerHost && devServerHost !== 'localhost') {
+      return url.replace('localhost', devServerHost);
+    }
+    // Last resort: warn and keep localhost (will fail)
+    console.warn(
+      '[API] Release build has localhost URL — API calls will fail. Rebuild with API_BASE_URL=http://<YOUR_IP>:3000',
+    );
+  }
+  return url;
+}
+
+const BASE_URL = resolveBaseUrl(configUrl);
+
 export const API_BASE_URL = BASE_URL;
+
+console.log('[API] BASE_URL resolved to:', BASE_URL);
+console.log('[API] configUrl from config:', configUrl);
+console.log('[API] __DEV__:', __DEV__);
 
 export const apiClient = axios.create({
   baseURL: `${BASE_URL}/api/v1`,
@@ -13,14 +48,40 @@ export const apiClient = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Attach JWT on every request
+// Log every outgoing request
 apiClient.interceptors.request.use((config) => {
   const token = useAuthStore.getState().token;
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  console.log(
+    `[API] → ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`,
+    config.data ? JSON.stringify(config.data) : '',
+  );
   return config;
 });
+
+// Log every response / error + auto-logout on 401
+apiClient.interceptors.response.use(
+  (response) => {
+    console.log(`[API] ← ${response.status} ${response.config.url}`);
+    return response;
+  },
+  (error) => {
+    console.error(
+      `[API] ✗ ${error.config?.method?.toUpperCase()} ${error.config?.url}`,
+      error.message,
+      error.response?.status,
+      JSON.stringify(error.response?.data),
+    );
+    // Auto-logout when server rejects the token
+    if (error.response?.status === 401 && !error.config?.url?.includes('/auth/')) {
+      console.warn('[API] 401 received — clearing session');
+      useAuthStore.getState().clearAuth();
+    }
+    return Promise.reject(error);
+  },
+);
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
 
