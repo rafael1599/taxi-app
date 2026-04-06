@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Rockland Taxi – Driver",
-    "slug": "rockland-taxi-driver",
+    "name": "Drivly – Driver",
+    "slug": "drivly-driver",
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -13,10 +13,10 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.rocklandtaxi.driver",
+      "bundleIdentifier": "com.drivly.driver",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Rockland Taxi needs your location to navigate to riders.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Rockland Taxi needs your location to receive nearby ride requests."
+        "NSLocationWhenInUseUsageDescription": "Drivly needs your location to navigate to riders.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Drivly needs your location to receive nearby ride requests."
       }
     },
     "android": {
@@ -24,7 +24,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1a1a2e"
       },
-      "package": "com.rocklandtaxi.driver",
+      "package": "com.drivly.driver",
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
@@ -35,7 +35,7 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Rockland Taxi needs your location to receive ride requests.",
+          "locationAlwaysAndWhenInUsePermission": "Drivly needs your location to receive ride requests.",
           "isAndroidBackgroundLocationEnabled": true
         }
       ]

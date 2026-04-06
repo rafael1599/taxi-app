@@ -1,5 +1,5 @@
 {
-  "name": "@rockland-taxi/rider",
+  "name": "@drivly/rider",
   "version": "0.1.0",
   "main": "expo-router/entry",
   "scripts": {

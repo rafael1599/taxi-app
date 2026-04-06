@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Rockland Taxi – Rider",
-    "slug": "rockland-taxi-rider",
+    "name": "Drivly – Rider",
+    "slug": "drivly-rider",
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -13,9 +13,9 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.rocklandtaxi.rider",
+      "bundleIdentifier": "com.drivly.rider",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Rockland Taxi needs your location to find nearby drivers and auto-fill your pickup address."
+        "NSLocationWhenInUseUsageDescription": "Drivly needs your location to find nearby drivers and auto-fill your pickup address."
       }
     },
     "android": {
@@ -23,17 +23,14 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1a1a2e"
       },
-      "package": "com.rocklandtaxi.rider",
-      "permissions": [
-        "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
-      ]
+      "package": "com.drivly.rider",
+      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
     },
     "plugins": [
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Rockland Taxi needs your location to show nearby drivers and auto-fill your pickup address."
+          "locationWhenInUsePermission": "Drivly needs your location to show nearby drivers and auto-fill your pickup address."
         }
       ]
     ],

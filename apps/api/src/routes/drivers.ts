@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { db, schema } from '@rockland-taxi/db';
+import { db, schema } from '@drivly/db';
 import { eq, and } from 'drizzle-orm';
 import { requireDriver } from '../middleware/auth.js';
 import { updateDriverLocation } from '../services/dispatch.js';

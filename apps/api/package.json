@@ -1,5 +1,5 @@
 {
-  "name": "@rockland-taxi/api",
+  "name": "@drivly/api",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -19,8 +19,8 @@
     "@fastify/swagger": "^8.15.0",
     "@fastify/swagger-ui": "^4.2.0",
     "@fastify/websocket": "^10.0.0",
-    "@rockland-taxi/db": "workspace:*",
-    "@rockland-taxi/shared": "workspace:*",
+    "@drivly/db": "workspace:*",
+    "@drivly/shared": "workspace:*",
     "@sentry/node": "^8.0.0",
     "@whiskeysockets/baileys": "7.0.0-rc.9",
     "bcryptjs": "^3.0.3",

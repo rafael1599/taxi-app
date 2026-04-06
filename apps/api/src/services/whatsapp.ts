@@ -8,7 +8,7 @@ import makeWASocket, {
 import { Boom } from '@hapi/boom';
 import { join } from 'path';
 import { mkdir } from 'fs/promises';
-import { db, schema } from '@rockland-taxi/db';
+import { db, schema } from '@drivly/db';
 import { eq, and } from 'drizzle-orm';
 import { calculatePriceQuote, type PriceQuoteResult } from './pricing.js';
 import { startDriverSearch } from './tripLifecycle.js';
@@ -493,7 +493,7 @@ async function createSession(companyId: string, companyName: string): Promise<Co
   const socket = makeWASocket({
     auth: state,
     printQRInTerminal: false,
-    browser: ['RocklandTaxi', 'Chrome', '120.0'],
+    browser: ['Drivly', 'Chrome', '120.0'],
   });
 
   session.socket = socket;

@@ -1,4 +1,4 @@
-import { calculateFare, haversineDistanceKm } from '@rockland-taxi/shared';
+import { calculateFare, haversineDistanceKm } from '@drivly/shared';
 
 export interface FareEstimate {
   distanceKm: number;
@@ -14,7 +14,7 @@ export function estimateFare(
   surgeMultiplier = 1.0,
 ): FareEstimate {
   const distanceKm = haversineDistanceKm(pickupLat, pickupLng, dropoffLat, dropoffLng);
-  // Rough speed estimate: 30 km/h average in Rockland area
+  // Rough speed estimate: 30 km/h average in service area
   const durationMin = Math.ceil((distanceKm / 30) * 60);
   const fareUsd = calculateFare(distanceKm, durationMin, surgeMultiplier);
   return { distanceKm, durationMin, fareUsd };

@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 
-const CREDENTIALS_KEY = 'rockland_driver_credentials';
+const CREDENTIALS_KEY = 'drivly_driver_credentials';
 
 // Expo Go doesn't support native modules like expo-local-authentication / expo-secure-store
 const isExpoGo = Constants.appOwnership === 'expo';
@@ -79,7 +79,7 @@ export async function getBiometricLabel(): Promise<string> {
 export async function authenticateWithBiometric(): Promise<boolean> {
   if (!LocalAuthentication) return false;
   const result = await LocalAuthentication.authenticateAsync({
-    promptMessage: 'Sign in to Rockland Taxi',
+    promptMessage: 'Sign in to Drivly',
     fallbackLabel: 'Use PIN',
     disableDeviceFallback: false, // allows PIN/password fallback
   });

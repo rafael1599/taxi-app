@@ -3,8 +3,7 @@ import { Client } from 'pg';
 const DEFAULT_COMPANY_ID = '00000000-0000-0000-0000-000000000001';
 
 async function run() {
-  const url =
-    process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@localhost:5432/rockland_taxi';
+  const url = process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@localhost:5432/drivly';
   const client = new Client({ connectionString: url });
   await client.connect();
 
@@ -20,8 +19,8 @@ async function run() {
          VALUES ($1, $2, $3, $4)`,
         [
           DEFAULT_COMPANY_ID,
-          'Rockland Taxi',
-          'rockland-taxi',
+          'Drivly',
+          'drivly',
           JSON.stringify({
             baseFareUsd: 3.0,
             perKmUsd: 1.75,
@@ -30,7 +29,7 @@ async function run() {
           }),
         ],
       );
-      console.log('  Created default company: Rockland Taxi');
+      console.log('  Created default company: Drivly');
     } else {
       console.log('  Default company already exists');
     }

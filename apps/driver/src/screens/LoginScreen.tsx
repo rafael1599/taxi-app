@@ -26,6 +26,87 @@ import {
 
 type Props = { navigation: NativeStackNavigationProp<RootStackParamList, 'Login'> };
 
+// ── Detailed error extraction ─────────────────────────────────────────────
+interface ErrorDetail {
+  title: string;
+  body: string;
+}
+
+function buildErrorMessage(err: unknown): ErrorDetail {
+  // Axios error with server response
+  const axErr = err as {
+    response?: {
+      status?: number;
+      data?: { error?: string; message?: string; issues?: Array<{ message: string }> };
+    };
+    message?: string;
+    code?: string;
+    request?: unknown;
+  };
+
+  if (axErr.response) {
+    const { status, data } = axErr.response;
+
+    // Zod validation errors from the API
+    if (data?.issues && Array.isArray(data.issues)) {
+      const details = data.issues.map((i) => `• ${i.message}`).join('\n');
+      return { title: 'Validation Error', body: details };
+    }
+
+    // Server-provided error message
+    const serverMsg = data?.error || data?.message;
+
+    switch (status) {
+      case 401:
+        return {
+          title: 'Invalid Credentials',
+          body: serverMsg || 'Email or password is incorrect.',
+        };
+      case 429:
+        return {
+          title: 'Too Many Attempts',
+          body: 'You have been rate-limited. Please wait a few minutes and try again.',
+        };
+      case 400:
+        return {
+          title: 'Bad Request',
+          body: serverMsg || 'The server rejected the request. Check your input.',
+        };
+      case 500:
+      case 502:
+      case 503:
+        return {
+          title: `Server Error (${status})`,
+          body: serverMsg || 'The server encountered an internal error. Try again later.',
+        };
+      default:
+        return {
+          title: `Error ${status}`,
+          body: serverMsg || `Unexpected response from server (HTTP ${status}).`,
+        };
+    }
+  }
+
+  // Network error — no response received at all
+  if (axErr.request) {
+    const code = axErr.code;
+    if (code === 'ECONNABORTED') {
+      return {
+        title: 'Request Timeout',
+        body: 'The server took too long to respond. Check your connection or try again.',
+      };
+    }
+    return {
+      title: 'Network Error',
+      body: `Could not reach the server.\n\nPossible causes:\n• No internet connection\n• Server is not running\n• Wrong server address\n\nTechnical: ${axErr.message || code || 'unknown'}`,
+    };
+  }
+
+  // Something else entirely (JS error, etc.)
+  const fallback = axErr.message || String(err);
+  return { title: 'Unexpected Error', body: fallback };
+}
+
 export function LoginScreen({ navigation }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -82,10 +163,8 @@ export function LoginScreen({ navigation }: Props) {
 
         setAuth(data.token, data.driverId);
       } catch (err: unknown) {
-        const msg =
-          (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
-          'Login failed. Please try again.';
-        Alert.alert('Error', msg);
+        const detail = buildErrorMessage(err);
+        Alert.alert(detail.title, detail.body);
       } finally {
         setLoading(false);
       }
@@ -121,7 +200,7 @@ export function LoginScreen({ navigation }: Props) {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={styles.inner}>
-        <Text style={styles.title}>{'\u{1F696}'} Rockland Taxi</Text>
+        <Text style={styles.title}>{'\u{1F696}'} Drivly</Text>
         <Text style={styles.subtitle}>Driver Portal</Text>
 
         <TextInput

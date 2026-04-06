@@ -1,6 +1,6 @@
-import { db, schema } from '@rockland-taxi/db';
+import { db, schema } from '@drivly/db';
 import { eq, and, sql } from 'drizzle-orm';
-import { haversineDistanceKm } from '@rockland-taxi/shared';
+import { haversineDistanceKm } from '@drivly/shared';
 import { getRedis } from './redis';
 import { createHash } from 'crypto';
 

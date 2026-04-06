@@ -54,7 +54,7 @@ export function RegisterScreen({ navigation }: Props) {
         email: form.email.trim().toLowerCase(),
         password: form.password,
         licenseNumber: form.licenseNumber.trim(),
-        tlcLicense: form.tlcLicense.trim() || undefined,
+        ...(form.tlcLicense.trim() ? { tlcLicense: form.tlcLicense.trim() } : {}),
         companyId: form.companyId.trim(),
       });
       setAuth(data.token, data.driverId);
@@ -91,7 +91,7 @@ export function RegisterScreen({ navigation }: Props) {
     >
       <ScrollView contentContainerStyle={styles.inner} keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>Create Account</Text>
-        <Text style={styles.subtitle}>Register as a Rockland Taxi driver</Text>
+        <Text style={styles.subtitle}>Register as a Drivly driver</Text>
 
         {fields.map(({ label, key, keyboard, secure }) => (
           <TextInput

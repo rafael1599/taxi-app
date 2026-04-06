@@ -7,8 +7,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_DIR = join(__dirname, '../src/migrations');
 
 async function run() {
-  const url =
-    process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@localhost:5432/rockland_taxi';
+  const url = process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@localhost:5432/drivly';
   const client = new Client({ connectionString: url });
   await client.connect();
 

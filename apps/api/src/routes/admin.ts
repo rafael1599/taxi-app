@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { db, schema } from '@rockland-taxi/db';
+import { db, schema } from '@drivly/db';
 import { eq, desc, count, and, inArray, sql, gte, lte } from 'drizzle-orm';
 import { requireAdmin, getCompanyId } from '../middleware/auth.js';
 import { getDriverPerformanceSummary } from '../services/driverMetrics.js';

@@ -13,7 +13,7 @@ OUTPUT_DIR="${1:-./backups}"
 mkdir -p "$OUTPUT_DIR"
 
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-FILENAME="rockland_taxi_${TIMESTAMP}.sql.gz"
+FILENAME="drivly_${TIMESTAMP}.sql.gz"
 DEST="${OUTPUT_DIR}/${FILENAME}"
 
 if [[ -z "${DATABASE_URL:-}" ]]; then

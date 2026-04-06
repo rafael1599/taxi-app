@@ -81,6 +81,12 @@ importers:
 
   apps/api:
     dependencies:
+      '@drivly/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@drivly/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@fastify/cors':
         specifier: ^9.0.0
         version: 9.0.1
@@ -102,12 +108,6 @@ importers:
       '@fastify/websocket':
         specifier: ^10.0.0
         version: 10.0.1
-      '@rockland-taxi/db':
-        specifier: workspace:*
-        version: link:../../packages/db
-      '@rockland-taxi/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
       '@sentry/node':
         specifier: ^8.0.0
         version: 8.55.1
@@ -17010,3 +17010,4 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.2.14
       react: 19.2.0
+              

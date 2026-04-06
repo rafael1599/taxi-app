@@ -27,7 +27,7 @@ export const DISPATCH = {
 } as const;
 
 export const MAP_DEFAULTS = {
-  // Rockland County, NY center
+  // Default service area center
   LATITUDE: 41.1495,
   LONGITUDE: -74.0232,
   LATITUDE_DELTA: 0.15,

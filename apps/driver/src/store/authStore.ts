@@ -1,12 +1,14 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const TOKEN_KEY = '@rockland_driver_token';
-const DRIVER_ID_KEY = '@rockland_driver_id';
+const TOKEN_KEY = '@drivly_driver_token';
+const DRIVER_ID_KEY = '@drivly_driver_id';
 
 function isTokenExpired(token: string): boolean {
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
+    const part = token.split('.')[1];
+    if (!part) return true;
+    const payload = JSON.parse(atob(part));
     return payload.exp * 1000 < Date.now();
   } catch {
     return true;
@@ -42,7 +44,9 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   hydrate: async () => {
     try {
-      const [[, token], [, driverId]] = await AsyncStorage.multiGet([TOKEN_KEY, DRIVER_ID_KEY]);
+      const results = await AsyncStorage.multiGet([TOKEN_KEY, DRIVER_ID_KEY]);
+      const token = results[0]?.[1];
+      const driverId = results[1]?.[1];
       if (token && isTokenExpired(token)) {
         await AsyncStorage.multiRemove([TOKEN_KEY, DRIVER_ID_KEY]);
         set({ token: null, driverId: null, hydrated: true });

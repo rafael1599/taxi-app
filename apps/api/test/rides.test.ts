@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 
 // Mock the DB module so tests don't require a live Postgres connection
-vi.mock('@rockland-taxi/db', () => ({
+vi.mock('@drivly/db', () => ({
   db: {
     insert: vi.fn().mockReturnValue({
       values: vi.fn().mockReturnValue({
@@ -101,7 +101,7 @@ describe('POST /api/v1/rides (unauthenticated)', () => {
 describe('POST /api/v1/auth/driver/register', () => {
   it('returns 201 with a token on valid payload', async () => {
     // Patch the db.insert chain to return a driver
-    const { db } = await import('@rockland-taxi/db');
+    const { db } = await import('@drivly/db');
     vi.mocked(db.insert).mockReturnValueOnce({
       values: vi.fn().mockReturnValue({
         returning: vi.fn().mockResolvedValue([{ id: 'driver-uuid' }]),

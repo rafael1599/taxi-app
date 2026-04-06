@@ -5,11 +5,13 @@
 We use a single Git repository with **npm workspaces** for all platform components.
 
 **Why monorepo:**
+
 - TypeScript types in `packages/shared` are imported directly — no package publish step, no type drift between API and apps
 - A single `npm install` at root resolves all deps; no cross-repo version pinning
 - Atomic commits across API + app changes (e.g., adding a new API field + consuming it in the app in one PR)
 
 **Why npm workspaces over Turborepo/Nx:**
+
 - Our package count is small (6 packages) — Turborepo's build caching adds complexity without proportional benefit at this scale
 - npm workspaces hoisting is sufficient; we can adopt Turbo later if build times grow
 
@@ -18,7 +20,7 @@ We use a single Git repository with **npm workspaces** for all platform componen
 ## Directory Layout
 
 ```
-rockland-taxi/
+drivly/
 ├── README.md
 ├── package.json              # root — workspaces config, shared dev deps
 ├── tsconfig.base.json        # base TS config extended by all packages
@@ -125,11 +127,11 @@ Packages reference each other by workspace name:
 
 ```ts
 // In apps/api
-import { RideStatus, calculateFare } from '@rockland-taxi/shared';
-import { db, schema } from '@rockland-taxi/db';
+import { RideStatus, calculateFare } from '@drivly/shared';
+import { db, schema } from '@drivly/db';
 
 // In apps/rider-app
-import { RideStatus } from '@rockland-taxi/shared';
+import { RideStatus } from '@drivly/shared';
 ```
 
-All packages are prefixed `@rockland-taxi/*` in their `package.json` names.
+All packages are prefixed `@drivly/*` in their `package.json` names.

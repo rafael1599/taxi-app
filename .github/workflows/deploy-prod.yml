@@ -44,7 +44,7 @@ jobs:
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
-          SENTRY_PROJECT: rockland-taxi-api
+          SENTRY_PROJECT: drivly-api
         with:
           environment: production
           version: ${{ github.event.release.tag_name }}

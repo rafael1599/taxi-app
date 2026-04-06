@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { db, schema } from '@rockland-taxi/db';
+import { db, schema } from '@drivly/db';
 import { eq, and } from 'drizzle-orm';
 import { requireRider } from '../middleware/auth.js';
 import { findNearbyDrivers } from '../services/dispatch.js';

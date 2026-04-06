@@ -1,19 +1,19 @@
-# Rockland Taxi — Custom Taxi Platform for Rockland County, NY
+# Drivly — White-Label Taxi Dispatch Platform
 
-A full-stack ride-hailing platform built specifically for the Rockland, NY taxi market.
+A full-stack white-label ride-hailing platform for taxi operators.
 
 ## Overview
 
-This monorepo contains all components of the Rockland Taxi platform:
+This monorepo contains all components of the Drivly platform:
 
-| Package | Description |
-|---|---|
-| `apps/api` | Node.js/TypeScript REST + WebSocket API server |
-| `apps/driver-app` | React Native driver app (iOS + Android) |
-| `apps/rider-app` | React Native rider app (iOS + Android) |
-| `apps/admin` | React web admin dashboard |
+| Package           | Description                                       |
+| ----------------- | ------------------------------------------------- |
+| `apps/api`        | Node.js/TypeScript REST + WebSocket API server    |
+| `apps/driver-app` | React Native driver app (iOS + Android)           |
+| `apps/rider-app`  | React Native rider app (iOS + Android)            |
+| `apps/admin`      | React web admin dashboard                         |
 | `packages/shared` | Shared TypeScript types, utilities, and constants |
-| `packages/db` | Database migrations, seeds, and query helpers |
+| `packages/db`     | Database migrations, seeds, and query helpers     |
 
 ## Quick Start
 

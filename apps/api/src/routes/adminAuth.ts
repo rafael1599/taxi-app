@@ -1,8 +1,8 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { db, schema } from '@rockland-taxi/db';
+import { db, schema } from '@drivly/db';
 import { eq, count } from 'drizzle-orm';
-import { JWT_EXPIRY_SEC } from '@rockland-taxi/shared';
+import { JWT_EXPIRY_SEC } from '@drivly/shared';
 import bcrypt from 'bcryptjs';
 
 const loginSchema = z.object({

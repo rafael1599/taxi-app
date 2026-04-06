@@ -13,6 +13,7 @@ const navItems = [
   { to: '/billing', label: 'Billing', page: 'billing' },
   { to: '/settings', label: 'Company', page: 'settings' },
   { to: '/whatsapp', label: 'WhatsApp', page: 'whatsapp' },
+  { to: '/legacy', label: 'Legacy Data', page: 'legacy' },
 ];
 
 const ROLE_ACCESS: Record<string, string[]> = {
@@ -26,6 +27,7 @@ const ROLE_ACCESS: Record<string, string[]> = {
     'settings',
     'whatsapp',
     'billing',
+    'legacy',
   ],
   super_admin: [
     'dashboard',
@@ -37,6 +39,7 @@ const ROLE_ACCESS: Record<string, string[]> = {
     'settings',
     'whatsapp',
     'billing',
+    'legacy',
   ],
   dispatcher: ['dashboard', 'analytics', 'rides', 'map'],
   viewer: ['dashboard', 'analytics'],
@@ -138,7 +141,7 @@ export default function Layout() {
   return (
     <div style={s.shell}>
       <aside style={s.sidebar}>
-        <div style={s.logo}>Taxi Dispatch</div>
+        <div style={s.logo}>Drivly</div>
 
         {isPlatformAdmin() && companies.length > 0 && (
           <select

@@ -17,7 +17,7 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: rockland_taxi_test
+          POSTGRES_DB: drivly_test
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -37,7 +37,7 @@ jobs:
           - 6379:6379
 
     env:
-      DATABASE_URL: postgres://postgres:postgres@localhost:5432/rockland_taxi_test
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/drivly_test
       REDIS_URL: redis://localhost:6379
       JWT_SECRET: ci-test-secret-not-for-production
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { estimateFare } from '../src/services/fare.js';
-import { haversineDistanceKm, calculateFare, FARE } from '@rockland-taxi/shared';
+import { haversineDistanceKm, calculateFare, FARE } from '@drivly/shared';
 
 describe('haversineDistanceKm', () => {
   it('returns ~0 for same point', () => {
@@ -35,7 +35,7 @@ describe('calculateFare', () => {
 
 describe('estimateFare', () => {
   it('returns non-zero values for a valid trip', () => {
-    // Nyack to Spring Valley — realistic Rockland trip
+    // Nyack to Spring Valley — realistic trip
     const result = estimateFare(41.0909, -73.9179, 41.1128, -74.0487);
     expect(result.distanceKm).toBeGreaterThan(0);
     expect(result.durationMin).toBeGreaterThan(0);

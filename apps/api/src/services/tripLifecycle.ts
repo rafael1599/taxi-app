@@ -1,6 +1,6 @@
-import { db, schema } from '@rockland-taxi/db';
+import { db, schema } from '@drivly/db';
 import { eq, and, sql } from 'drizzle-orm';
-import { DISPATCH } from '@rockland-taxi/shared/constants';
+import { DISPATCH } from '@drivly/shared/constants';
 import { findNearbyDrivers } from './dispatch.js';
 import { sseManager } from './sseManager.js';
 import { notifyRiderViaWhatsApp } from './whatsapp.js';

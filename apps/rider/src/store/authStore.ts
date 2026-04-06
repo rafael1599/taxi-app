@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const TOKEN_KEY = '@rockland_rider_token';
-const RIDER_ID_KEY = '@rockland_rider_id';
+const TOKEN_KEY = '@drivly_rider_token';
+const RIDER_ID_KEY = '@drivly_rider_id';
 
 function isTokenExpired(token: string): boolean {
   try {

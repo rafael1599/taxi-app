@@ -1,4 +1,4 @@
-# Taxi App (Rockland Taxi)
+# Drivly — Taxi Dispatch Platform
 
 ## Project Structure
 
@@ -19,7 +19,7 @@ Monorepo with pnpm workspaces:
 docker compose up -d
 ```
 
-- **PostgreSQL + PostGIS**: `localhost:5432` (user: `postgres`, pass: `postgres`, db: `rockland_taxi`)
+- **PostgreSQL + PostGIS**: `localhost:5432` (user: `postgres`, pass: `postgres`, db: `drivly`)
 - **Redis**: `localhost:6380` (mapped from container 6379, to avoid conflicts with other projects)
 
 ### 2. Database Migration
@@ -68,7 +68,7 @@ Runs API + Admin concurrently.
 
 Copy `.env.example` to `.env`. Key vars:
 
-- `DATABASE_URL` — PostgreSQL connection string (default: `postgresql://postgres:postgres@localhost:5432/rockland_taxi`)
+- `DATABASE_URL` — PostgreSQL connection string (default: `postgresql://postgres:postgres@localhost:5432/drivly`)
 - `REDIS_URL` — Redis connection (default: `redis://localhost:6380`)
 - `JWT_SECRET` — Used for JWT signing and password hashing
 - `PORT` — API port (default: 3000)

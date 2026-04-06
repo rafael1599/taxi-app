@@ -128,7 +128,7 @@ export function ActiveRideScreen({ navigation, route }: Props) {
               setActiveRide(null);
               navigation.replace('RateRider', {
                 rideId: ride.id,
-                fare: ride.fareEstimate ?? undefined,
+                ...(ride.fareEstimate ? { fare: ride.fareEstimate } : {}),
               });
             } catch {
               Alert.alert('Error', 'Could not complete trip.');

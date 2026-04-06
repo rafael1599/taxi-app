@@ -62,7 +62,7 @@ export type RootStackParamList = {
   RateRider: { rideId: string; fare?: string };
 };
 
-const Stack = createNativeStackNavigator();
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export function AppNavigator() {
   const token = useAuthStore((s) => s.token);

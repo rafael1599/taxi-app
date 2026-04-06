@@ -56,7 +56,7 @@ export function RegisterScreen({ navigation }: Props) {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.inner} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>🚕 Rockland Taxi</Text>
+        <Text style={styles.title}>🚕 Drivly</Text>
         <Text style={styles.subtitle}>Create Rider Account</Text>
 
         <TextInput
@@ -111,7 +111,13 @@ export function RegisterScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#1a1a2e' },
   inner: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 28, paddingVertical: 40 },
-  title: { fontSize: 32, fontWeight: '700', color: '#f5c518', textAlign: 'center', marginBottom: 4 },
+  title: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: '#f5c518',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
   subtitle: { fontSize: 16, color: '#aaa', textAlign: 'center', marginBottom: 36 },
   input: {
     backgroundColor: '#2a2a42',

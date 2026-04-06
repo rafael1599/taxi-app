@@ -35,7 +35,9 @@ export function PaymentScreen() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const handleAddCard = async () => {
     setAdding(true);
@@ -43,7 +45,7 @@ export function PaymentScreen() {
       const { data } = await paymentApi.createSetupIntent();
       const { error: initError } = await initPaymentSheet({
         setupIntentClientSecret: data.clientSecret,
-        merchantDisplayName: 'Rockland Taxi',
+        merchantDisplayName: 'Drivly',
         style: 'alwaysDark',
       });
       if (initError) {
@@ -69,9 +71,7 @@ export function PaymentScreen() {
   const handleSetDefault = async (id: string) => {
     try {
       await paymentApi.setDefault(id);
-      setMethods((prev) =>
-        prev.map((m) => ({ ...m, isDefault: m.id === id }))
-      );
+      setMethods((prev) => prev.map((m) => ({ ...m, isDefault: m.id === id })));
     } catch {
       Alert.alert('Error', 'Could not update default payment method.');
     }
@@ -151,11 +151,7 @@ export function PaymentScreen() {
       )}
 
       <View style={styles.footer}>
-        <TouchableOpacity
-          style={styles.addBtn}
-          onPress={handleAddCard}
-          disabled={adding}
-        >
+        <TouchableOpacity style={styles.addBtn} onPress={handleAddCard} disabled={adding}>
           {adding ? (
             <ActivityIndicator color="#1a1a2e" />
           ) : (

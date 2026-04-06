@@ -1,16 +1,16 @@
 {
-  "name": "rockland-taxi",
+  "name": "drivly",
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@10.25.0",
   "scripts": {
-    "dev": "concurrently \"pnpm --filter @rockland-taxi/api dev\" \"pnpm --filter @rockland-taxi/admin dev\"",
-    "driver": "pnpm --filter @rockland-taxi/driver start",
+    "dev": "concurrently \"pnpm --filter @drivly/api dev\" \"pnpm --filter @drivly/admin dev\"",
+    "driver": "pnpm --filter @drivly/driver start",
     "build": "pnpm -r --if-present run build",
     "test": "pnpm -r --if-present run test",
-    "db:generate": "pnpm --filter @rockland-taxi/db generate",
-    "db:migrate": "pnpm --filter @rockland-taxi/db migrate",
-    "db:seed": "pnpm --filter @rockland-taxi/db seed",
+    "db:generate": "pnpm --filter @drivly/db generate",
+    "db:migrate": "pnpm --filter @drivly/db migrate",
+    "db:seed": "pnpm --filter @drivly/db seed",
     "lint": "eslint . --ext .ts,.tsx --ignore-path .gitignore",
     "type-check": "tsc --noEmit",
     "prepare": "husky"

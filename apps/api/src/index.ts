@@ -24,8 +24,10 @@ import { tripLifecycleRoutes } from './routes/tripLifecycle.js';
 import { whatsappRoutes } from './routes/whatsapp.js';
 import { billingRoutes } from './routes/billing.js';
 import { ratingRoutes } from './routes/ratings.js';
+import { legacyRoutes } from './routes/legacy.js';
 import { initWhatsAppSessions } from './services/whatsapp.js';
 import { initSentry } from './plugins/sentry.js';
+import { closeSupabasePool } from '@drivly/db';
 
 initSentry(process.env.npm_package_version);
 
@@ -62,7 +64,7 @@ export async function buildApp() {
   await app.register(fastifySwagger, {
     openapi: {
       info: {
-        title: 'Rockland Taxi API',
+        title: 'Drivly API',
         description: 'Multi-tenant taxi dispatch platform API',
         version: process.env.npm_package_version ?? '0.1.0',
       },
@@ -87,6 +89,7 @@ export async function buildApp() {
         { name: 'Billing', description: 'Stripe billing and commissions' },
         { name: 'Admin', description: 'Admin operations' },
         { name: 'Ratings', description: 'Ride ratings' },
+        { name: 'Legacy', description: 'Legacy data from Control de Horas (Supabase)' },
       ],
     },
   });
@@ -114,7 +117,7 @@ export async function buildApp() {
 
     // DB check
     try {
-      const { db: database } = await import('@rockland-taxi/db');
+      const { db: database } = await import('@drivly/db');
       await database.execute(sql`SELECT 1`);
       checks.database = 'ok';
     } catch {
@@ -159,6 +162,7 @@ export async function buildApp() {
   await app.register(whatsappRoutes, { prefix: '/api/v1' });
   await app.register(billingRoutes, { prefix: '/api/v1' });
   await app.register(ratingRoutes, { prefix: '/api/v1' });
+  await app.register(legacyRoutes, { prefix: '/api/v1' });
 
   // Initialize Redis-backed services after server is ready
   app.addHook('onReady', async () => {
@@ -176,6 +180,7 @@ export async function buildApp() {
   app.addHook('onClose', async () => {
     await closeTripQueue();
     await closeRedis();
+    await closeSupabasePool();
   });
 
   return app;

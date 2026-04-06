@@ -1,11 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Alert,
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -14,8 +8,8 @@ import { riderApi, type RiderProfile } from '../api/client';
 import { useRideStore } from '../store/rideStore';
 import { useAuthStore } from '../store/authStore';
 
-// Rockland County, NY default center
-const ROCKLAND_REGION = {
+// Default map center
+const DEFAULT_REGION = {
   latitude: 41.1489,
   longitude: -74.0148,
   latitudeDelta: 0.15,
@@ -26,28 +20,34 @@ type Props = { navigation: NativeStackNavigationProp<RootStackParamList> };
 
 export function HomeScreen({ navigation }: Props) {
   const [profile, setProfile] = useState<RiderProfile | null>(null);
-  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(
+    null,
+  );
   const activeRide = useRideStore((s) => s.activeRide);
   const clearAuth = useAuthStore((s) => s.clearAuth);
   const mapRef = useRef<MapView>(null);
 
   useEffect(() => {
-    riderApi.me().then(({ data }) => setProfile(data)).catch(() => {});
+    riderApi
+      .me()
+      .then(({ data }) => setProfile(data))
+      .catch(() => {});
     Location.requestForegroundPermissionsAsync().then(({ status }) => {
       if (status !== 'granted') return;
       Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).then((loc) => {
         const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
         setUserLocation(coords);
-        mapRef.current?.animateToRegion({ ...coords, latitudeDelta: 0.05, longitudeDelta: 0.05 }, 800);
+        mapRef.current?.animateToRegion(
+          { ...coords, latitudeDelta: 0.05, longitudeDelta: 0.05 },
+          800,
+        );
       });
     });
   }, []);
 
   // If there's an active ride in a non-terminal state, prompt rider to view it
   const hasActiveRide =
-    activeRide &&
-    activeRide.status !== 'completed' &&
-    activeRide.status !== 'cancelled';
+    activeRide && activeRide.status !== 'completed' && activeRide.status !== 'cancelled';
 
   return (
     <View style={styles.container}>
@@ -55,7 +55,7 @@ export function HomeScreen({ navigation }: Props) {
         ref={mapRef}
         style={styles.map}
         provider={PROVIDER_GOOGLE}
-        initialRegion={ROCKLAND_REGION}
+        initialRegion={DEFAULT_REGION}
         showsUserLocation
       >
         {userLocation && <Marker coordinate={userLocation} title="You" pinColor="#f5c518" />}
@@ -64,9 +64,7 @@ export function HomeScreen({ navigation }: Props) {
       {/* Header overlay */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.greeting}>
-            Hi, {profile?.fullName?.split(' ')[0] ?? '…'}
-          </Text>
+          <Text style={styles.greeting}>Hi, {profile?.fullName?.split(' ')[0] ?? '…'}</Text>
           <Text style={styles.subGreeting}>Where are you going?</Text>
         </View>
         <TouchableOpacity onPress={clearAuth}>

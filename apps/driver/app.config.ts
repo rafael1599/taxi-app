@@ -2,8 +2,8 @@ import { ExpoConfig, ConfigContext } from 'expo/config';
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
-  name: 'Rockland Taxi – Driver',
-  slug: 'rockland-taxi-driver',
+  name: 'Drivly – Driver',
+  slug: 'drivly-driver',
   version: '0.1.0',
   orientation: 'portrait',
   icon: './assets/icon.png',
@@ -15,12 +15,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   ios: {
     supportsTablet: false,
-    bundleIdentifier: 'com.rocklandtaxi.driver',
+    bundleIdentifier: 'com.drivly.driver',
     infoPlist: {
-      NSLocationWhenInUseUsageDescription:
-        'Rockland Taxi needs your location to navigate to riders.',
+      NSLocationWhenInUseUsageDescription: 'Drivly needs your location to navigate to riders.',
       NSLocationAlwaysAndWhenInUseUsageDescription:
-        'Rockland Taxi needs your location to receive nearby ride requests.',
+        'Drivly needs your location to receive nearby ride requests.',
     },
   },
   android: {
@@ -28,7 +27,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       foregroundImage: './assets/adaptive-icon.png',
       backgroundColor: '#1a1a2e',
     },
-    package: 'com.rocklandtaxi.driver',
+    package: 'com.drivly.driver',
     permissions: ['ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION', 'ACCESS_BACKGROUND_LOCATION'],
   },
   plugins: [
@@ -36,7 +35,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       'expo-location',
       {
         locationAlwaysAndWhenInUsePermission:
-          'Rockland Taxi needs your location to receive ride requests.',
+          'Drivly needs your location to receive ride requests.',
         isAndroidBackgroundLocationEnabled: true,
       },
     ],

@@ -48,3 +48,6 @@ android/
 # Claude (skills symlink + local config)
 .claude/skills
 .claude/skills/
+
+# Bug reports
+*.zip

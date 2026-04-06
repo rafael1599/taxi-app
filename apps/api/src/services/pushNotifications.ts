@@ -1,4 +1,4 @@
-import { db, schema } from '@rockland-taxi/db';
+import { db, schema } from '@drivly/db';
 import { eq } from 'drizzle-orm';
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';

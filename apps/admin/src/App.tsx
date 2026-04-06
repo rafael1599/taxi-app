@@ -11,6 +11,7 @@ import CompanySettingsPage from './pages/CompanySettingsPage';
 import WhatsAppPage from './pages/WhatsAppPage';
 import BillingPage from './pages/BillingPage';
 import AnalyticsPage from './pages/AnalyticsPage';
+import LegacyPage from './pages/LegacyPage';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const user = useAuthStore((s) => s.user);
@@ -29,6 +30,7 @@ const ROLE_ACCESS: Record<string, string[]> = {
     'settings',
     'whatsapp',
     'billing',
+    'legacy',
   ],
   super_admin: [
     'dashboard',
@@ -40,6 +42,7 @@ const ROLE_ACCESS: Record<string, string[]> = {
     'settings',
     'whatsapp',
     'billing',
+    'legacy',
   ],
   dispatcher: ['dashboard', 'analytics', 'rides', 'map'],
   viewer: ['dashboard', 'analytics'],
@@ -129,6 +132,14 @@ export default function App() {
           element={
             <RoleRoute page="billing">
               <BillingPage />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="legacy"
+          element={
+            <RoleRoute page="legacy">
+              <LegacyPage />
             </RoleRoute>
           }
         />

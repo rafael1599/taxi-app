@@ -48,7 +48,7 @@ export function LoginScreen({ navigation }: Props) {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={styles.inner}>
-        <Text style={styles.title}>🚕 Rockland Taxi</Text>
+        <Text style={styles.title}>🚕 Drivly</Text>
         <Text style={styles.subtitle}>Rider App</Text>
 
         <TextInput
@@ -70,7 +70,11 @@ export function LoginScreen({ navigation }: Props) {
         />
 
         <TouchableOpacity style={styles.btn} onPress={handleLogin} disabled={loading}>
-          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Sign In</Text>}
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.btnText}>Sign In</Text>
+          )}
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => navigation.navigate('Register')}>
@@ -84,7 +88,13 @@ export function LoginScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#1a1a2e' },
   inner: { flex: 1, justifyContent: 'center', paddingHorizontal: 28 },
-  title: { fontSize: 32, fontWeight: '700', color: '#f5c518', textAlign: 'center', marginBottom: 4 },
+  title: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: '#f5c518',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
   subtitle: { fontSize: 16, color: '#aaa', textAlign: 'center', marginBottom: 36 },
   input: {
     backgroundColor: '#2a2a42',

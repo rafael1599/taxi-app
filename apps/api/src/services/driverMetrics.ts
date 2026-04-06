@@ -1,4 +1,4 @@
-import { db, schema } from '@rockland-taxi/db';
+import { db, schema } from '@drivly/db';
 import { eq, and, sql, gte } from 'drizzle-orm';
 
 const ROLLING_WINDOW_DAYS = 7;

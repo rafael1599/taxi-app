@@ -8,7 +8,7 @@ import {
   getSession,
   getAllSessions,
 } from '../services/whatsapp.js';
-import { db, schema } from '@rockland-taxi/db';
+import { db, schema } from '@drivly/db';
 import { eq } from 'drizzle-orm';
 
 const startSessionSchema = z.object({

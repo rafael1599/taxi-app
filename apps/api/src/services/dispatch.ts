@@ -1,4 +1,4 @@
-import { db, schema } from '@rockland-taxi/db';
+import { db, schema } from '@drivly/db';
 import { eq, and, sql, lt } from 'drizzle-orm';
 
 export interface NearbyDriver {

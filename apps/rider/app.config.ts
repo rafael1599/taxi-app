@@ -2,8 +2,8 @@ import { ExpoConfig, ConfigContext } from 'expo/config';
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
-  name: 'Rockland Taxi – Rider',
-  slug: 'rockland-taxi-rider',
+  name: 'Drivly – Rider',
+  slug: 'drivly-rider',
   version: '0.1.0',
   orientation: 'portrait',
   icon: './assets/icon.png',
@@ -15,10 +15,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   ios: {
     supportsTablet: false,
-    bundleIdentifier: 'com.rocklandtaxi.rider',
+    bundleIdentifier: 'com.drivly.rider',
     infoPlist: {
       NSLocationWhenInUseUsageDescription:
-        'Rockland Taxi needs your location to find nearby drivers and auto-fill your pickup address.',
+        'Drivly needs your location to find nearby drivers and auto-fill your pickup address.',
     },
   },
   android: {
@@ -26,7 +26,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       foregroundImage: './assets/adaptive-icon.png',
       backgroundColor: '#1a1a2e',
     },
-    package: 'com.rocklandtaxi.rider',
+    package: 'com.drivly.rider',
     permissions: ['ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION'],
   },
   plugins: [
@@ -34,7 +34,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       'expo-location',
       {
         locationWhenInUsePermission:
-          'Rockland Taxi needs your location to show nearby drivers and auto-fill your pickup address.',
+          'Drivly needs your location to show nearby drivers and auto-fill your pickup address.',
       },
     ],
   ],

@@ -71,7 +71,7 @@ export default function LoginPage() {
     <div style={s.page}>
       <div style={s.card}>
         <div style={s.title}>Admin Login</div>
-        <div style={s.sub}>Taxi Dispatch Platform</div>
+        <div style={s.sub}>Drivly Platform</div>
         {error && <div style={s.err}>{error}</div>}
         <form onSubmit={handleSubmit}>
           <label style={s.label}>Email</label>
