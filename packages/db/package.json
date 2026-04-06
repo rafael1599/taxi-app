@@ -7,8 +7,11 @@
   "types": "./src/index.ts",
   "scripts": {
     "generate": "drizzle-kit generate",
-    "migrate": "tsx scripts/migrate.ts",
-    "seed": "tsx scripts/seed.ts",
+    "migrate": "tsx --env-file=../../.env scripts/migrate.ts",
+    "migrate:admins": "tsx --env-file=../../.env scripts/migrate-supabase-admins.ts",
+    "migrate:price-overrides": "tsx --env-file=../../.env scripts/migrate-supabase-price-overrides.ts",
+    "migrate:drivers": "tsx --env-file=../../.env scripts/migrate-supabase-drivers.ts",
+    "seed": "tsx --env-file=../../.env scripts/seed.ts",
     "studio": "drizzle-kit studio",
     "type-check": "tsc --noEmit"
   },

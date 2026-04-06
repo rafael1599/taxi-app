@@ -2,4 +2,10 @@ packages:
   - apps/*
   - packages/*
 
-ign
+ignoredBuiltDependencies:
+  - '@whiskeysockets/baileys'
+  - es5-ext
+  - esbuild
+  - msgpackr-extract
+  - protobufjs
+  - sharp

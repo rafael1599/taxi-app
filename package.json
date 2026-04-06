@@ -11,6 +11,9 @@
     "db:generate": "pnpm --filter @drivly/db generate",
     "db:migrate": "pnpm --filter @drivly/db migrate",
     "db:seed": "pnpm --filter @drivly/db seed",
+    "db:migrate-admins": "pnpm --filter @drivly/db migrate:admins",
+    "db:migrate-price-overrides": "pnpm --filter @drivly/db migrate:price-overrides",
+    "db:migrate-drivers": "pnpm --filter @drivly/db migrate:drivers",
     "lint": "eslint . --ext .ts,.tsx --ignore-path .gitignore",
     "type-check": "tsc --noEmit",
     "prepare": "husky"
