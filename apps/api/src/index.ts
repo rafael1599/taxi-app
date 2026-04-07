@@ -57,7 +57,7 @@ export async function buildApp() {
       return request.ip;
     },
   });
-  await app.register(fastifyJwt, { secret: JWT_SECRET });
+  await app.register(fastifyJwt, { secret: JWT_SECRET as string });
   await app.register(fastifyWebsocket);
 
   // ── API Documentation ────────────────────────────────────────────────────

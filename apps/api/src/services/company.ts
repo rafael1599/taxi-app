@@ -22,10 +22,10 @@ export async function getCompanyBySlug(slug: string) {
 export async function createCompany(data: {
   name: string;
   slug: string;
-  logo?: string | null;
-  whatsappJid?: string | null;
-  isActive?: boolean;
-  settings?: Record<string, unknown>;
+  logo?: string | null | undefined;
+  whatsappJid?: string | null | undefined;
+  isActive?: boolean | undefined;
+  settings?: Record<string, unknown> | undefined;
 }) {
   const [company] = await db
     .insert(schema.companies)
@@ -43,14 +43,14 @@ export async function createCompany(data: {
 
 export async function updateCompany(
   id: string,
-  data: Partial<{
-    name: string;
-    slug: string;
-    logo: string | null;
-    whatsappJid: string | null;
-    isActive: boolean;
-    settings: Record<string, unknown>;
-  }>,
+  data: {
+    name?: string | undefined;
+    slug?: string | undefined;
+    logo?: string | null | undefined;
+    whatsappJid?: string | null | undefined;
+    isActive?: boolean | undefined;
+    settings?: Record<string, unknown> | undefined;
+  },
 ) {
   const [updated] = await db
     .update(schema.companies)

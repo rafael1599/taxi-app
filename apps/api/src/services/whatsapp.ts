@@ -93,7 +93,7 @@ async function deleteBooking(senderJid: string): Promise<void> {
 function extractCoordinates(text: string): { lat: number; lng: number } | null {
   for (const pattern of MAPS_PATTERNS) {
     const match = text.match(pattern);
-    if (match) {
+    if (match && match[1] && match[2]) {
       const lat = parseFloat(match[1]);
       const lng = parseFloat(match[2]);
       if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
@@ -107,7 +107,7 @@ function extractCoordinates(text: string): { lat: number; lng: number } | null {
 function extractAddressFromMapsLink(text: string): string {
   // Try to extract place name from Google Maps URL
   const placeMatch = text.match(/google\.com\/maps\/place\/([^/@]+)/i);
-  if (placeMatch) {
+  if (placeMatch && placeMatch[1]) {
     return decodeURIComponent(placeMatch[1].replace(/\+/g, ' '));
   }
   return 'Location from map';
@@ -141,7 +141,7 @@ async function findOrCreateRider(companyId: string, phone: string, name?: string
     })
     .returning();
 
-  return rider.id;
+  return rider!.id;
 }
 
 // ── Message Sending ───────────────────────────────────────────────────────────
@@ -379,6 +379,7 @@ async function confirmBooking(
     // Store the WhatsApp JID on this ride for notifications
     // We'll use the rider's phone to look up their JID later
     // Start driver search
+    if (!ride) throw new Error('Failed to create ride');
     const result = await startDriverSearch(ride.id, companyId);
 
     if (!result.success) {

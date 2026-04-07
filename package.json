@@ -15,7 +15,7 @@
     "db:migrate-price-overrides": "pnpm --filter @drivly/db migrate:price-overrides",
     "db:migrate-drivers": "pnpm --filter @drivly/db migrate:drivers",
     "lint": "eslint . --ext .ts,.tsx --ignore-path .gitignore",
-    "type-check": "tsc --noEmit",
+    "type-check": "pnpm -r --if-present run type-check",
     "prepare": "husky"
   },
   "devDependencies": {

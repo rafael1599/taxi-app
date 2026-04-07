@@ -42,10 +42,10 @@ export async function getDriverCancellationRate(
       ),
     );
 
-  const { cancellations, completions, total } = result[0];
-  const rate = total > 0 ? cancellations / total : 0;
+  const row = result[0]!;
+  const rate = row.total > 0 ? row.cancellations / row.total : 0;
 
-  return { cancellations, completions, rate };
+  return { cancellations: row.cancellations, completions: row.completions, rate };
 }
 
 /** Check if driver should be penalized for high cancellation rate */
@@ -101,7 +101,7 @@ export async function getDriverPerformanceSummary(driverId: string, companyId: s
       ),
     );
 
-  const stats = result[0];
+  const stats = result[0]!;
   const total = stats.cancellations + stats.completions;
   const cancellationRate = total > 0 ? stats.cancellations / total : 0;
 

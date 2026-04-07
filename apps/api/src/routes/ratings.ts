@@ -26,9 +26,8 @@ export async function ratingRoutes(app: FastifyInstance) {
         companyId: user.companyId,
         rideId,
         fromRiderId: user.sub,
-        toDriverId: undefined, // will be inferred from the ride
         score: body.score,
-        comment: body.comment,
+        ...(body.comment !== undefined ? { comment: body.comment } : {}),
       });
       return reply.code(201).send(rating);
     } catch (err: any) {
@@ -56,9 +55,8 @@ export async function ratingRoutes(app: FastifyInstance) {
         companyId: user.companyId,
         rideId,
         fromDriverId: user.sub,
-        toRiderId: undefined, // will be inferred from the ride
         score: body.score,
-        comment: body.comment,
+        ...(body.comment !== undefined ? { comment: body.comment } : {}),
       });
       return reply.code(201).send(rating);
     } catch (err: any) {

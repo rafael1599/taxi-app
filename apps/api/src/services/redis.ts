@@ -1,4 +1,4 @@
-import Redis from 'ioredis';
+import { Redis } from 'ioredis';
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6380';
 
@@ -10,12 +10,12 @@ export function getRedis(): Redis {
     client = new Redis(REDIS_URL, {
       maxRetriesPerRequest: null, // required by BullMQ
       enableReadyCheck: true,
-      retryStrategy(times) {
+      retryStrategy(times: number) {
         return Math.min(times * 200, 5000);
       },
     });
 
-    client.on('error', (err) => {
+    client.on('error', (err: Error) => {
       console.error('[Redis] Connection error:', err.message);
     });
 

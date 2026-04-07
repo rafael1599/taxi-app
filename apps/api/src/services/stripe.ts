@@ -531,7 +531,11 @@ export async function handleStripeWebhook(rawBody: string, signature: string) {
 /** List commissions for a company */
 export async function listCommissions(
   companyId: string,
-  opts: { limit?: number; offset?: number; driverId?: string } = {},
+  opts: {
+    limit?: number | undefined;
+    offset?: number | undefined;
+    driverId?: string | undefined;
+  } = {},
 ) {
   const { limit = 50, offset = 0, driverId } = opts;
   const conditions = [eq(schema.commissions.companyId, companyId)];

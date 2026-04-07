@@ -20,12 +20,10 @@ export function haversineDistanceKm(
 export function calculateFare(
   distanceKm: number,
   durationMin: number,
-  surgeMultiplier = FARE.SURGE_MULTIPLIER_DEFAULT,
+  surgeMultiplier: number = FARE.SURGE_MULTIPLIER_DEFAULT,
 ): number {
   const raw =
-    (FARE.BASE_FARE_USD +
-      distanceKm * FARE.PER_KM_USD +
-      durationMin * FARE.PER_MIN_USD) *
+    (FARE.BASE_FARE_USD + distanceKm * FARE.PER_KM_USD + durationMin * FARE.PER_MIN_USD) *
     surgeMultiplier;
   return Math.max(raw, FARE.MINIMUM_FARE_USD);
 }

@@ -12,7 +12,7 @@ export function initSentry(release?: string) {
   Sentry.init({
     dsn,
     environment: process.env.NODE_ENV ?? 'development',
-    release,
+    ...(release !== undefined ? { release } : {}),
     tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.2 : 1.0,
   });
 }

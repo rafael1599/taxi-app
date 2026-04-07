@@ -160,14 +160,22 @@ export async function rideRoutes(app: FastifyInstance) {
       return reply.code(409).send({ error: 'Ride not found or not assigned to you' });
     }
 
-    const updatedRejectedIds = [...(ride.rejectedDriverIds ?? []), user.sub];
+    const existingRaw = ride.rejectedDriverIds ? ride.rejectedDriverIds.replace(/[{}]/g, '') : '';
+    const existingArr = existingRaw
+      ? existingRaw
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : [];
+    const updatedRejectedIds = [...existingArr, user.sub];
+    const rejectedDriverIdsText = `{${updatedRejectedIds.join(',')}}`;
 
     // Clear current driver assignment
     await db
       .update(schema.rides)
       .set({
         driverId: null,
-        rejectedDriverIds: updatedRejectedIds,
+        rejectedDriverIds: rejectedDriverIdsText,
         updatedAt: new Date(),
       })
       .where(eq(schema.rides.id, id));

@@ -6,12 +6,12 @@ import { eq, and, sql, desc } from 'drizzle-orm';
 interface SubmitRatingParams {
   companyId: string;
   rideId: string;
-  fromRiderId?: string;
-  fromDriverId?: string;
-  toDriverId?: string;
-  toRiderId?: string;
+  fromRiderId?: string | undefined;
+  fromDriverId?: string | undefined;
+  toDriverId?: string | undefined;
+  toRiderId?: string | undefined;
   score: number;
-  comment?: string;
+  comment?: string | undefined;
 }
 
 export async function submitRating(params: SubmitRatingParams) {
@@ -80,12 +80,12 @@ async function updateDriverAvgRating(driverId: string) {
     .from(schema.ratings)
     .where(eq(schema.ratings.toDriverId, driverId));
 
-  const { avg, count } = result[0];
+  const row = result[0]!;
   await db
     .update(schema.drivers)
     .set({
-      avgRating: avg,
-      totalRatings: count,
+      avgRating: row.avg,
+      totalRatings: row.count,
       updatedAt: new Date(),
     })
     .where(eq(schema.drivers.id, driverId));
@@ -100,12 +100,12 @@ async function updateRiderAvgRating(riderId: string) {
     .from(schema.ratings)
     .where(eq(schema.ratings.toRiderId, riderId));
 
-  const { avg, count } = result[0];
+  const row = result[0]!;
   await db
     .update(schema.riders)
     .set({
-      avgRating: avg,
-      totalRatings: count,
+      avgRating: row.avg,
+      totalRatings: row.count,
       updatedAt: new Date(),
     })
     .where(eq(schema.riders.id, riderId));

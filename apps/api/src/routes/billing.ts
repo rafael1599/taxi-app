@@ -115,9 +115,9 @@ export async function billingRoutes(app: FastifyInstance) {
     if (!companyId) return reply.code(403).send({ error: 'Company scope required' });
     const query = request.query as { limit?: string; offset?: string; driverId?: string };
     return listCommissions(companyId, {
-      limit: query.limit ? parseInt(query.limit) : undefined,
-      offset: query.offset ? parseInt(query.offset) : undefined,
-      driverId: query.driverId,
+      ...(query.limit ? { limit: parseInt(query.limit) } : {}),
+      ...(query.offset ? { offset: parseInt(query.offset) } : {}),
+      ...(query.driverId ? { driverId: query.driverId } : {}),
     });
   });
 

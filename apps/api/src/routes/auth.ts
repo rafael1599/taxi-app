@@ -61,6 +61,8 @@ export async function authRoutes(app: FastifyInstance) {
       })
       .returning({ id: schema.drivers.id, companyId: schema.drivers.companyId });
 
+    if (!driver) return reply.code(500).send({ error: 'Failed to create driver' });
+
     const token = app.jwt.sign(
       { sub: driver.id, role: 'driver', companyId: driver.companyId },
       { expiresIn: JWT_EXPIRY_SEC },
@@ -75,7 +77,11 @@ export async function authRoutes(app: FastifyInstance) {
     const driver = await db.query.drivers.findFirst({
       where: eq(schema.drivers.email, body.email),
     });
-    if (!driver || !(await verifyPassword(body.password, driver.passwordHash))) {
+    if (
+      !driver ||
+      !driver.passwordHash ||
+      !(await verifyPassword(body.password, driver.passwordHash))
+    ) {
       return reply.code(401).send({ error: 'Invalid credentials' });
     }
 
@@ -109,6 +115,8 @@ export async function authRoutes(app: FastifyInstance) {
         email: body.email,
       })
       .returning({ id: schema.riders.id, companyId: schema.riders.companyId });
+
+    if (!rider) return reply.code(500).send({ error: 'Failed to create rider' });
 
     await db.insert(schema.ridersAuth).values({
       riderId: rider.id,

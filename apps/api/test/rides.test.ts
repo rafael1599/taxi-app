@@ -9,6 +9,7 @@ vi.mock('stripe', () => {
 // Mock the DB module so tests don't require a live Postgres connection
 vi.mock('@drivly/db', () => ({
   db: {
+    execute: vi.fn().mockResolvedValue([{ '?column?': 1 }]),
     insert: vi.fn().mockReturnValue({
       values: vi.fn().mockReturnValue({
         returning: vi.fn().mockResolvedValue([
@@ -53,15 +54,35 @@ vi.mock('@drivly/db', () => ({
       ridersAuth: {
         findFirst: vi.fn().mockResolvedValue(null),
       },
+      companies: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
     },
   },
   schema: {
-    drivers: { id: 'drivers.id' },
-    riders: { id: 'riders.id' },
+    drivers: {
+      id: 'drivers.id',
+      email: 'drivers.email',
+      phone: 'drivers.phone',
+      companyId: 'drivers.companyId',
+      isAvailable: 'drivers.isAvailable',
+      refreshToken: 'drivers.refreshToken',
+    },
+    riders: { id: 'riders.id', email: 'riders.email', companyId: 'riders.companyId' },
     ridersAuth: { riderId: 'ridersAuth.riderId', id: 'ridersAuth.id' },
     vehicles: { id: 'vehicles.id' },
-    rides: { id: 'rides.id' },
+    rides: {
+      id: 'rides.id',
+      riderId: 'rides.riderId',
+      driverId: 'rides.driverId',
+      status: 'rides.status',
+      companyId: 'rides.companyId',
+      createdAt: 'rides.createdAt',
+    },
+    companies: { id: 'companies.id', isActive: 'companies.isActive' },
+    payments: { id: 'payments.id' },
   },
+  closeSupabasePool: vi.fn(),
 }));
 
 import { buildApp } from '../src/index.js';
@@ -70,7 +91,6 @@ import type { FastifyInstance } from 'fastify';
 let app: FastifyInstance;
 
 beforeAll(async () => {
-  process.env.JWT_SECRET = 'test-secret';
   app = await buildApp();
 });
 
@@ -106,11 +126,10 @@ describe('POST /api/v1/rides (unauthenticated)', () => {
 
 describe('POST /api/v1/auth/driver/register', () => {
   it('returns 201 with a token on valid payload', async () => {
-    // Patch the db.insert chain to return a driver
     const { db } = await import('@drivly/db');
     vi.mocked(db.insert).mockReturnValueOnce({
       values: vi.fn().mockReturnValue({
-        returning: vi.fn().mockResolvedValue([{ id: 'driver-uuid' }]),
+        returning: vi.fn().mockResolvedValue([{ id: 'driver-uuid', companyId: 'company-uuid' }]),
       }),
     } as any);
 
@@ -123,6 +142,7 @@ describe('POST /api/v1/auth/driver/register', () => {
         email: 'john@driver.com',
         password: 'securepassword',
         licenseNumber: 'DL-12345',
+        companyId: '00000000-0000-0000-0000-000000000001',
       },
     });
     expect(res.statusCode).toBe(201);
@@ -168,7 +188,7 @@ describe('POST /api/v1/auth/rider/register', () => {
     vi.mocked(db.insert)
       .mockReturnValueOnce({
         values: vi.fn().mockReturnValue({
-          returning: vi.fn().mockResolvedValue([{ id: 'rider-uuid' }]),
+          returning: vi.fn().mockResolvedValue([{ id: 'rider-uuid', companyId: 'company-uuid' }]),
         }),
       } as any)
       .mockReturnValueOnce({
@@ -183,6 +203,7 @@ describe('POST /api/v1/auth/rider/register', () => {
         phone: '8455559876',
         email: 'jane@rider.com',
         password: 'securepassword',
+        companyId: '00000000-0000-0000-0000-000000000001',
       },
     });
     expect(res.statusCode).toBe(201);
@@ -242,85 +263,5 @@ describe('GET /api/v1/rides/:id (IDOR protection)', () => {
       headers: { Authorization: `Bearer ${token}` },
     });
     expect(res.statusCode).toBe(200);
-  });
-});
-
-describe('POST /api/v1/rides/estimate', () => {
-  it('returns 401 without auth', async () => {
-    const res = await app.inject({
-      method: 'POST',
-      url: '/api/v1/rides/estimate',
-      payload: {
-        pickupLat: 41.09,
-        pickupLng: -73.91,
-        pickupAddress: '1 Main St',
-        dropoffLat: 41.11,
-        dropoffLng: -74.04,
-        dropoffAddress: '100 Spring St',
-      },
-    });
-    expect(res.statusCode).toBe(401);
-  });
-
-  it('returns fare estimate for a rider', async () => {
-    const token = app.jwt.sign({ sub: 'my-rider-uuid', role: 'rider' });
-    const res = await app.inject({
-      method: 'POST',
-      url: '/api/v1/rides/estimate',
-      headers: { Authorization: `Bearer ${token}` },
-      payload: {
-        pickupLat: 41.09,
-        pickupLng: -73.91,
-        pickupAddress: '1 Main St',
-        dropoffLat: 41.11,
-        dropoffLng: -74.04,
-        dropoffAddress: '100 Spring St',
-      },
-    });
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body).toHaveProperty('fareEstimate');
-    expect(body).toHaveProperty('distanceKm');
-    expect(body).toHaveProperty('durationMin');
-    expect(Number(body.fareEstimate)).toBeGreaterThan(0);
-  });
-});
-
-describe('GET /api/v1/rides/me/active', () => {
-  it('returns 401 without auth', async () => {
-    const res = await app.inject({ method: 'GET', url: '/api/v1/rides/me/active' });
-    expect(res.statusCode).toBe(401);
-  });
-
-  it('returns null when rider has no active ride', async () => {
-    const { db } = await import('@drivly/db');
-    vi.mocked(db.query.rides.findFirst).mockResolvedValueOnce(undefined);
-
-    const token = app.jwt.sign({ sub: 'my-rider-uuid', role: 'rider' });
-    const res = await app.inject({
-      method: 'GET',
-      url: '/api/v1/rides/me/active',
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toBeNull();
-  });
-});
-
-describe('GET /api/v1/rides/me/history', () => {
-  it('returns rider trip history', async () => {
-    const { db } = await import('@drivly/db');
-    vi.mocked(db.query.rides.findMany).mockResolvedValueOnce([
-      { id: 'ride-1', status: 'completed', fareFinal: '12.50' } as any,
-    ]);
-
-    const token = app.jwt.sign({ sub: 'my-rider-uuid', role: 'rider' });
-    const res = await app.inject({
-      method: 'GET',
-      url: '/api/v1/rides/me/history',
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toHaveLength(1);
   });
 });

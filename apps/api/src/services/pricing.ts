@@ -1,7 +1,7 @@
 import { db, schema } from '@drivly/db';
 import { eq, and, sql } from 'drizzle-orm';
 import { haversineDistanceKm } from '@drivly/shared';
-import { getRedis } from './redis';
+import { getRedis } from './redis.js';
 import { createHash } from 'crypto';
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -23,8 +23,8 @@ export interface PriceQuoteResult {
   distanceSource: string;
   currency: string;
   surgeMultiplier: number;
-  fixedRouteId?: string;
-  zoneId?: string;
+  fixedRouteId?: string | undefined;
+  zoneId?: string | undefined;
 }
 
 const ETA_VARIANCE = 0.3; // ±30% for ETA range
@@ -382,10 +382,10 @@ export async function getPricingRules(companyId: string) {
 export async function upsertPricingRules(
   companyId: string,
   data: {
-    baseRatePerMile?: string;
-    minimumFare?: string;
-    perMinuteRate?: string;
-    currency?: string;
+    baseRatePerMile?: string | undefined;
+    minimumFare?: string | undefined;
+    perMinuteRate?: string | undefined;
+    currency?: string | undefined;
   },
 ) {
   const existing = await getPricingRules(companyId);
@@ -423,7 +423,7 @@ export async function createZoneMinimum(data: {
   companyId: string;
   zoneName: string;
   minimumFare: string;
-  boundaryPolygon?: string;
+  boundaryPolygon?: string | undefined;
 }) {
   const [created] = await db.insert(schema.zoneMinimums).values(data).returning();
   return created;
@@ -432,7 +432,11 @@ export async function createZoneMinimum(data: {
 export async function updateZoneMinimum(
   id: string,
   companyId: string,
-  data: Partial<{ zoneName: string; minimumFare: string; boundaryPolygon: string }>,
+  data: {
+    zoneName?: string | undefined;
+    minimumFare?: string | undefined;
+    boundaryPolygon?: string | undefined;
+  },
 ) {
   const [updated] = await db
     .update(schema.zoneMinimums)
@@ -467,12 +471,12 @@ export async function getFixedRoute(id: string, companyId: string) {
 
 export async function createFixedRoute(data: {
   companyId: string;
-  name?: string;
+  name?: string | undefined;
   originLat: number;
   originLng: number;
   destLat: number;
   destLng: number;
-  radiusMeters?: number;
+  radiusMeters?: number | undefined;
   fixedPrice: string;
 }) {
   const [created] = await db.insert(schema.fixedRoutes).values(data).returning();
@@ -482,15 +486,15 @@ export async function createFixedRoute(data: {
 export async function updateFixedRoute(
   id: string,
   companyId: string,
-  data: Partial<{
-    name: string;
-    originLat: number;
-    originLng: number;
-    destLat: number;
-    destLng: number;
-    radiusMeters: number;
-    fixedPrice: string;
-  }>,
+  data: {
+    name?: string | undefined;
+    originLat?: number | undefined;
+    originLng?: number | undefined;
+    destLat?: number | undefined;
+    destLng?: number | undefined;
+    radiusMeters?: number | undefined;
+    fixedPrice?: string | undefined;
+  },
 ) {
   const [updated] = await db
     .update(schema.fixedRoutes)

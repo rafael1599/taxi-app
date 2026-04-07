@@ -112,11 +112,14 @@ export async function startDriverSearch(
   // Find and offer to closest driver
   const offered = await offerToNextDriver(rideId, companyId, ride.pickupLat, ride.pickupLng);
 
-  return {
+  const result: StartSearchResult = {
     success: true,
     rideId,
-    offeredDriverId: offered ?? undefined,
   };
+  if (offered != null) {
+    result.offeredDriverId = offered;
+  }
+  return result;
 }
 
 // ── Offer to Next Driver ──────────────────────────────────────────────────────
@@ -156,7 +159,7 @@ async function offerToNextDriver(
     return null;
   }
 
-  const closestDriver = eligibleDrivers[0];
+  const closestDriver = eligibleDrivers[0]!;
   const expiresAt = new Date(Date.now() + DISPATCH.OFFER_TIMEOUT_SEC * 1000);
 
   // Create the offer
@@ -170,6 +173,8 @@ async function offerToNextDriver(
       expiresAt,
     })
     .returning();
+
+  if (!offer) return null;
 
   // Update driver status to incoming
   await db
@@ -592,10 +597,12 @@ export async function updateTripStatus(
     completed: 'completed',
   };
 
+  const mappedDriverStatus = driverStatusMap[newStatus]!;
+
   await db
     .update(schema.drivers)
     .set({
-      status: driverStatusMap[newStatus] as typeof schema.drivers.$inferSelect.status,
+      status: mappedDriverStatus as typeof schema.drivers.$inferSelect.status,
       updatedAt: new Date(),
     })
     .where(eq(schema.drivers.id, driverId));
@@ -604,7 +611,7 @@ export async function updateTripStatus(
     driverId,
     companyId,
     ride.status,
-    driverStatusMap[newStatus],
+    mappedDriverStatus,
     'driver',
     driverId,
   ).catch(console.error);
@@ -662,13 +669,14 @@ export async function updateTripStatus(
   // Push notifications to rider
   if (newStatus === 'arrived') {
     notifyRiderDriverArrived(ride.riderId, rideId).catch(console.error);
-  } else if (newStatus === 'completed') {
+  } else if (newStatus === 'completed' && updated) {
     notifyRiderTripCompleted(ride.riderId, {
       rideId,
       fareFinal: updated.fareFinal ?? updated.fareEstimate ?? '0',
     }).catch(console.error);
   }
 
+  if (!updated) return { success: false, error: 'Failed to update ride' };
   return { success: true, ride: updated };
 }
 

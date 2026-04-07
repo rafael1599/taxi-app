@@ -43,11 +43,11 @@ export async function adminRoutes(app: FastifyInstance) {
       .where(pendingWhere);
 
     return {
-      totalDrivers: totalDrivers.count,
-      activeDrivers: activeDrivers.count,
-      totalRiders: totalRiders.count,
-      totalRides: totalRides.count,
-      pendingRides: pendingRides.count,
+      totalDrivers: totalDrivers!.count,
+      activeDrivers: activeDrivers!.count,
+      totalRiders: totalRiders!.count,
+      totalRides: totalRides!.count,
+      pendingRides: pendingRides!.count,
     };
   });
 
@@ -237,6 +237,7 @@ export async function adminRoutes(app: FastifyInstance) {
       .from(schema.rides)
       .where(baseWhere);
 
+    if (!rideStats) throw new Error('Failed to get ride stats');
     const completionRate =
       rideStats.total > 0 ? Math.round((rideStats.completed / rideStats.total) * 100) : 0;
 
@@ -310,6 +311,9 @@ export async function adminRoutes(app: FastifyInstance) {
       .groupBy(schema.rides.driverId, schema.drivers.fullName, schema.drivers.avgRating)
       .orderBy(sql`COUNT(*) FILTER (WHERE ${schema.rides.status} = 'completed') DESC`)
       .limit(5);
+
+    if (!revenue) throw new Error('Failed to get revenue');
+    if (!ratingStats) throw new Error('Failed to get rating stats');
 
     return {
       period: { from: dateFrom.toISOString(), to: dateTo.toISOString() },

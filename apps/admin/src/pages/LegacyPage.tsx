@@ -77,6 +77,15 @@ interface TimeSummary {
 type Tab = 'overview' | 'drivers' | 'trips' | 'prices' | 'employees' | 'hours';
 
 // ── Styles ───────────────────────────────────────────────────────────────────
+const badge = (color: string): React.CSSProperties => ({
+  display: 'inline-block',
+  padding: '2px 8px',
+  borderRadius: 12,
+  fontSize: 11,
+  fontWeight: 600,
+  background: color === 'green' ? '#dcfce7' : color === 'red' ? '#fef2f2' : '#f1f5f9',
+  color: color === 'green' ? '#166534' : color === 'red' ? '#dc2626' : '#475569',
+});
 const s: Record<string, React.CSSProperties> = {
   page: { maxWidth: 1200 },
   title: { fontSize: 24, fontWeight: 700, marginBottom: 4 },
@@ -129,15 +138,6 @@ const s: Record<string, React.CSSProperties> = {
     textTransform: 'uppercase' as const,
   },
   td: { padding: '10px 12px', borderBottom: '1px solid #f1f5f9' },
-  badge: (color: string) => ({
-    display: 'inline-block',
-    padding: '2px 8px',
-    borderRadius: 12,
-    fontSize: 11,
-    fontWeight: 600,
-    background: color === 'green' ? '#dcfce7' : color === 'red' ? '#fef2f2' : '#f1f5f9',
-    color: color === 'green' ? '#166534' : color === 'red' ? '#dc2626' : '#475569',
-  }),
   loading: { textAlign: 'center' as const, padding: 40, color: '#94a3b8' },
   error: { textAlign: 'center' as const, padding: 40, color: '#dc2626' },
   filterRow: {
@@ -337,11 +337,11 @@ export default function LegacyPage() {
                       <td style={s.td}>{d.vehicle ?? '—'}</td>
                       <td style={s.td}>{d.plate ?? '—'}</td>
                       <td style={s.td}>
-                        <span style={s.badge(d.isActive ? 'green' : 'red')}>
+                        <span style={badge(d.isActive ? 'green' : 'red')}>
                           {d.isActive ? 'Active' : 'Inactive'}
                         </span>
                         {d.isOnline && (
-                          <span style={{ ...s.badge('green'), marginLeft: 4 }}>Online</span>
+                          <span style={{ ...badge('green'), marginLeft: 4 }}>Online</span>
                         )}
                       </td>
                     </tr>
@@ -407,7 +407,7 @@ export default function LegacyPage() {
                       <td style={s.td}>{usd(t.price)}</td>
                       <td style={s.td}>
                         <span
-                          style={s.badge(
+                          style={badge(
                             t.status === 'completed'
                               ? 'green'
                               : t.status === 'cancelled'
@@ -457,7 +457,7 @@ export default function LegacyPage() {
                       <td style={s.td}>{usd(p.price)}</td>
                       <td style={s.td}>{p.radiusMiles}</td>
                       <td style={s.td}>
-                        <span style={s.badge(p.isActive ? 'green' : 'red')}>
+                        <span style={badge(p.isActive ? 'green' : 'red')}>
                           {p.isActive ? 'Active' : 'Inactive'}
                         </span>
                       </td>
@@ -509,7 +509,7 @@ export default function LegacyPage() {
                       <td style={s.td}>{e.hourlyRate ? usd(e.hourlyRate) : '—'}</td>
                       <td style={s.td}>{e.role}</td>
                       <td style={s.td}>
-                        <span style={s.badge(e.isActive ? 'green' : 'red')}>
+                        <span style={badge(e.isActive ? 'green' : 'red')}>
                           {e.isActive ? 'Active' : 'Inactive'}
                         </span>
                       </td>

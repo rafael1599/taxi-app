@@ -8,11 +8,11 @@ export interface AuditEntry {
   entityId: string;
   companyId: string;
   action: string;
-  fromState?: string;
-  toState?: string;
-  actorType?: 'system' | 'driver' | 'rider' | 'admin';
-  actorId?: string;
-  metadata?: Record<string, unknown>;
+  fromState?: string | undefined;
+  toState?: string | undefined;
+  actorType?: 'system' | 'driver' | 'rider' | 'admin' | undefined;
+  actorId?: string | undefined;
+  metadata?: Record<string, unknown> | undefined;
 }
 
 // ── Audit Logger ─────────────────────────────────────────────────────────────
@@ -52,7 +52,7 @@ export async function getAuditLog(
   const redis = getRedis();
   const key = companyId ? `audit:log:${companyId}` : AUDIT_LIST_KEY;
   const entries = await redis.lrange(key, offset, offset + limit - 1);
-  return entries.map((e) => JSON.parse(e) as AuditEntry);
+  return entries.map((e: string) => JSON.parse(e) as AuditEntry);
 }
 
 // ── Convenience helpers ──────────────────────────────────────────────────────
