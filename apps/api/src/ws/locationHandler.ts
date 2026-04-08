@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { db, schema } from '@excellent-taxi/db';
+import { db, schema } from '@drivly/db';
 import { eq, and, or } from 'drizzle-orm';
 import { updateDriverLocation } from '../services/dispatch.js';
 import { joinRoom, leaveRoom, broadcastToRide } from './rooms.js';

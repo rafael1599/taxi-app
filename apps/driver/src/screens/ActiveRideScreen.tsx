@@ -13,7 +13,7 @@ import * as Location from 'expo-location';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../navigation';
-import { rideApi, tripApi, type Ride } from '../api/client';
+import { rideApi, tripApi, driverApi, type Ride } from '../api/client';
 import { useRideStore } from '../store/rideStore';
 
 type Props = {
@@ -90,7 +90,9 @@ export function ActiveRideScreen({ navigation, route }: Props) {
     });
   }, [rideId]);
 
-  // Live GPS updates
+  // Live GPS updates — update map + send to backend for rider WebSocket
+  const lastSentRef = useRef(0);
+
   useEffect(() => {
     let sub: Location.LocationSubscription | null = null;
 
@@ -99,7 +101,15 @@ export function ActiveRideScreen({ navigation, route }: Props) {
       Location.watchPositionAsync(
         { accuracy: Location.Accuracy.High, timeInterval: 3000, distanceInterval: 5 },
         (loc) => {
-          setDriverPos({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+          const { latitude, longitude } = loc.coords;
+          setDriverPos({ latitude, longitude });
+
+          // Throttle backend updates to every 5 seconds
+          const now = Date.now();
+          if (now - lastSentRef.current >= 5_000) {
+            lastSentRef.current = now;
+            driverApi.updateLocation(latitude, longitude).catch(() => {});
+          }
         },
       ).then((s) => {
         sub = s;

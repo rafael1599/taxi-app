@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -6,6 +6,7 @@ import type { RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../navigation';
 import { rideApi, type Ride, type RideStatus } from '../api/client';
 import { useRideStore } from '../store/rideStore';
+import { useRideWebSocket } from '../hooks/useRideWebSocket';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'ActiveRide'>;
@@ -35,18 +36,41 @@ export function ActiveRideScreen({ navigation, route }: Props) {
   const setActiveRide = useRideStore((s) => s.setActiveRide);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // ── WebSocket: real-time driver location & status ────────────────────────
+  const handleDriverLocation = useCallback((lat: number, lng: number) => {
+    setDriverPos({ latitude: lat, longitude: lng });
+  }, []);
+
+  const handleStatusChange = useCallback(
+    (status: string) => {
+      setRide((prev) => (prev ? { ...prev, status: status as RideStatus } : prev));
+      if (status === 'completed' || status === 'cancelled') {
+        setActiveRide(null);
+      }
+    },
+    [setActiveRide],
+  );
+
+  const handleDriverAssigned = useCallback(() => {
+    // Re-fetch ride to get full driver info
+    rideApi
+      .get(rideId)
+      .then(({ data }) => setRide(data))
+      .catch(() => {});
+  }, [rideId]);
+
+  useRideWebSocket({
+    rideId,
+    onDriverLocation: handleDriverLocation,
+    onStatusChange: handleStatusChange,
+    onDriverAssigned: handleDriverAssigned,
+  });
+
+  // ── Fallback polling (lower frequency, covers reconnection gaps) ─────────
   const loadRide = async () => {
     try {
       const { data } = await rideApi.get(rideId);
       setRide(data);
-      if (data.driverId) {
-        // In a real app the backend would push the driver's live location via WebSocket.
-        // Here we simulate a position slightly offset from the pickup.
-        setDriverPos({
-          latitude: data.pickupLat + 0.005,
-          longitude: data.pickupLng - 0.005,
-        });
-      }
       if (data.status === 'completed' || data.status === 'cancelled') {
         setActiveRide(null);
         if (pollRef.current) clearInterval(pollRef.current);
@@ -58,7 +82,7 @@ export function ActiveRideScreen({ navigation, route }: Props) {
 
   useEffect(() => {
     loadRide();
-    pollRef.current = setInterval(loadRide, 5_000);
+    pollRef.current = setInterval(loadRide, 15_000); // reduced from 5s — WebSocket is primary
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
