@@ -28,7 +28,8 @@ docker compose up -d
 pnpm db:migrate
 ```
 
-Uses custom SQL migration script (`packages/db/scripts/migrate.ts`), NOT drizzle-kit.
+Currently uses custom SQL migration script (`packages/db/scripts/migrate.ts`).
+**DECISIÓN (2026-04-12): Migrar a Supabase CLI** (`supabase db push`) + Drizzle generate + CI diff check.
 
 ### 3. Create First Admin (only needed once, on empty DB)
 
@@ -57,12 +58,18 @@ Runs API + Admin concurrently.
 
 ## Auth / Login
 
-- Admin login: `POST /api/v1/auth/admin/login` — email + password (min 8 chars)
-- Driver login: `POST /api/v1/auth/driver/login`
-- Rider login: `POST /api/v1/auth/rider/login`
-- Password hashing: SHA-256 with JWT_SECRET as salt
-- JWT expiry: 7 days
-- Admin roles: `super_admin`, `dispatcher`, `viewer`
+**DECISIÓN (2026-04-12): Migrar a Supabase Auth completo.**
+
+- Auth actual (legacy, pendiente de migración):
+  - Password hashing: SHA-256 con migración on-login a bcrypt (código ya existe)
+  - JWT expiry: 7 days
+- Auth objetivo (Supabase Auth):
+  - OAuth: Google, Apple (login con un tap)
+  - Phone OTP: via Twilio (SMS/WhatsApp)
+  - Biométrico: huella/Face ID via `expo-local-authentication`, reauth cada 7 días
+  - PIN como fallback
+  - Supabase maneja: bcrypt, JWT corto + refresh rotation, token storage
+- Admin roles: `super_admin`, `dispatcher`, `viewer`, `platform_admin`, `company_admin`
 
 ## Environment Variables
 
@@ -84,6 +91,20 @@ Copy `.env.example` to `.env`. Key vars:
 | `pnpm test`        | Run all tests               |
 | `pnpm lint`        | ESLint across project       |
 | `pnpm type-check`  | TypeScript check            |
+
+## Decisiones arquitectónicas (2026-04-12)
+
+Ver `docs/database-audit-and-plan.md` §11 para detalle completo. Resumen:
+
+- **Auth**: Supabase Auth completo (OAuth + OTP + biométrico/PIN cada 7 días)
+- **Real-time**: WebSocket custom + Redis (no Supabase Realtime)
+- **Storage**: Híbrido — Supabase Storage (liviano) + Cloudflare R2 (pesado)
+- **DB tier**: Supabase Free ahora, Pro antes de launch
+- **Migraciones**: Supabase CLI + Drizzle generate + CI diff check
+- **ORM**: Unificar en Drizzle (migrar control-de-horas de Prisma)
+- **Tabla viajes**: Drivly extiende `Trip` existente (no crear `rides`)
+- **Audit log**: Triggers + hash-chain desde el inicio
+- **IA y base**: En paralelo
 
 ## Skills
 

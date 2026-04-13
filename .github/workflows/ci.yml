@@ -44,25 +44,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
+          cache: 'pnpm'
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Lint
-        run: npm run lint
+        run: pnpm lint
 
       - name: Type-check
-        run: npm run type-check
+        run: pnpm type-check
 
       - name: Run DB migrations (test DB)
-        run: npm run db:migrate
+        run: pnpm db:migrate
+
+      - name: Check Drizzle schema drift
+        run: |
+          pnpm --filter @drivly/db exec drizzle-kit generate
+          git diff --exit-code packages/db/src/ || (echo "ERROR: Drizzle schema is out of sync with migrations. Run 'pnpm db:generate' locally and commit the changes." && exit 1)
 
       - name: Test
-        run: npm run test
+        run: pnpm test
 
       - name: Build
-        run: npm run build
+        run: pnpm build
