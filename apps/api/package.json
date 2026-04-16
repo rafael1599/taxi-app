@@ -19,6 +19,7 @@
     "@fastify/swagger": "^8.15.0",
     "@fastify/swagger-ui": "^4.2.0",
     "@fastify/websocket": "^10.0.0",
+    "@hapi/boom": "^10.0.1",
     "@drivly/db": "workspace:*",
     "@drivly/shared": "workspace:*",
     "@sentry/node": "^8.0.0",

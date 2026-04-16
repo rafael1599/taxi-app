@@ -241,6 +241,14 @@ companies (tenant root)
 
 ## 4. Decisiones Arquitectónicas Revisadas
 
+> ⚠️ **SUPERSEDED por Decisión 2026-04-12 #1 — Supabase Auth completo.**
+>
+> Las decisiones D1, D2 y D3 a continuación (auth custom con JWT + OTP local + refresh_token en `drivers`) quedaron obsoletas. Drivly migra a **Supabase Auth completo**: OAuth (Google/Apple), phone OTP via Twilio, biométrico/PIN cada 7 días (`expo-local-authentication` + `expo-secure-store`). Supabase maneja bcrypt, rotación, y storage de tokens.
+>
+> **No implementar** las columnas propuestas en `drivers` para auth local: `otp_code`, `otp_channel`, `otp_expires_at`, `refresh_token`, `refresh_token_expires_at`, `phone_verified`, `last_login_at`. Son redundantes con Supabase Auth y crearían deuda al migrar.
+>
+> Ver `database-audit-and-plan.md §11` y `project_drivly_arch_decisions.md` para la decisión vigente.
+
 ### D1: ¿Dónde vive la auth? → **Todo en DB local, métodos múltiples**
 
 - Admins: password + bcrypt (migrar hashes de Supabase)
@@ -373,6 +381,12 @@ Todos van como TEXT en `legacy_supabase_id`. PKs nuevos son UUID nativo.
 - TimeEntry.projectId/locationId: 100% NULL (features no usadas)
 
 ---
+
+> ⚠️ **SUPERSEDED por Decisión 2026-04-12 #1 — Supabase Auth completo.**
+>
+> Toda esta sección (§5.1 flujo OTP custom, §5.2 password fallback, §5.3 sesión persistente con refresh_token) queda obsoleta. El flujo real post-migración lo maneja Supabase Auth: Twilio para OTP, rotación automática de tokens, `expo-secure-store` en mobile. No implementar los endpoints `POST /auth/driver/otp/send`, `POST /auth/driver/otp/verify`, `POST /auth/driver/refresh` descritos aquí.
+>
+> Ver `database-audit-and-plan.md §11` y `project_drivly_arch_decisions.md` para la decisión vigente.
 
 ## 5. Auth Flow Revisado para Drivers
 

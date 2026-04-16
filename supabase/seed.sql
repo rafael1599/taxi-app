@@ -1,0 +1,1 @@
+-- Seed data goes here. Managed by Supabase CLI.

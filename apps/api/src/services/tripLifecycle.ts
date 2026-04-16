@@ -139,8 +139,7 @@ async function offerToNextDriver(
     return null;
   }
 
-  // Parse rejected driver IDs from the PostgreSQL array stored as text
-  const rejectedIds = parseRejectedDriverIds(ride.rejectedDriverIds);
+  const rejectedIds = ride.rejectedDriverIds ?? [];
 
   // Find nearby IDLE drivers for this company, excluding rejected ones
   const nearbyDrivers = await findNearbyDrivers(
@@ -748,13 +747,3 @@ function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
   return R * c;
 }
 
-function parseRejectedDriverIds(raw: string | null): string[] {
-  if (!raw) return [];
-  // PostgreSQL UUID[] comes as {uuid1,uuid2,...} or text representation
-  const cleaned = raw.replace(/[{}]/g, '');
-  if (!cleaned) return [];
-  return cleaned
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-}

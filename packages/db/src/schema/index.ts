@@ -1,6 +1,8 @@
 import {
+  bigserial,
   boolean,
   char,
+  customType,
   doublePrecision,
   index,
   integer,
@@ -12,7 +14,31 @@ import {
   timestamp,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { sql } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
+
+// ── Custom types ───────────────────────────────────────────────────────────────
+
+// PostGIS geography(Point, 4326) — read as text (WKT) from Drizzle; writes happen
+// via raw SQL or GENERATED ALWAYS STORED columns in migrations.
+const geographyPoint = customType<{ data: string; driverData: string }>({
+  dataType() {
+    return 'geography(Point,4326)';
+  },
+});
+
+// PostGIS geography(Polygon, 4326) — same semantics as geographyPoint.
+const geographyPolygon = customType<{ data: string; driverData: string }>({
+  dataType() {
+    return 'geography(Polygon,4326)';
+  },
+});
+
+// PostgreSQL bytea — represented as Buffer in JS.
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType() {
+    return 'bytea';
+  },
+});
 
 // ── Enums ──────────────────────────────────────────────────────────────────────
 
@@ -97,8 +123,8 @@ export const companies = pgTable('companies', {
   commissionPercent: numeric('commission_percent', { precision: 5, scale: 2 })
     .notNull()
     .default('10.00'),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 // ── Tables ─────────────────────────────────────────────────────────────────────
@@ -118,8 +144,8 @@ export const riders = pgTable('riders', {
   avgRating: numeric('avg_rating', { precision: 3, scale: 2 }),
   totalRatings: integer('total_ratings').notNull().default(0),
   isActive: boolean('is_active').notNull().default(true),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const drivers = pgTable(
@@ -144,28 +170,31 @@ export const drivers = pgTable(
     status: driverStatusEnum('status').notNull().default('offline'),
     currentLat: doublePrecision('current_lat'),
     currentLng: doublePrecision('current_lng'),
-    locationAt: timestamp('location_at'),
+    // PostGIS column — GENERATED ALWAYS AS STORED (see migration 0012).
+    // Read-only from Drizzle's perspective: never INSERT or UPDATE this column.
+    currentGeog: geographyPoint('current_geog'),
+    locationAt: timestamp('location_at', { withTimezone: true }),
     pushToken: text('push_token'),
     avgRating: numeric('avg_rating', { precision: 3, scale: 2 }),
     totalRatings: integer('total_ratings').notNull().default(0),
     // OTP authentication (primary method for drivers)
     phoneVerified: boolean('phone_verified').notNull().default(false),
     otpCode: text('otp_code'),
-    otpExpiresAt: timestamp('otp_expires_at'),
+    otpExpiresAt: timestamp('otp_expires_at', { withTimezone: true }),
     otpChannel: otpChannelEnum('otp_channel'),
-    lastLoginAt: timestamp('last_login_at'),
+    lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
     // Persistent session (refresh tokens — Uber-style)
     refreshToken: text('refresh_token').unique(),
-    refreshTokenExpiresAt: timestamp('refresh_token_expires_at'),
+    refreshTokenExpiresAt: timestamp('refresh_token_expires_at', { withTimezone: true }),
     // Optional link to employee (future: driver on payroll)
     employeeId: uuid('employee_id'),
     // Soft delete with timestamp
-    deactivatedAt: timestamp('deactivated_at'),
+    deactivatedAt: timestamp('deactivated_at', { withTimezone: true }),
     // Migration tracking
     legacySupabaseId: text('legacy_supabase_id').unique(),
     updatedBy: uuid('updated_by'),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index('drivers_available_idx')
@@ -190,8 +219,8 @@ export const ridersAuth = pgTable('riders_auth', {
     .notNull()
     .references(() => riders.id, { onDelete: 'cascade' }),
   passwordHash: text('password_hash').notNull(),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const vehicles = pgTable('vehicles', {
@@ -208,7 +237,7 @@ export const vehicles = pgTable('vehicles', {
   color: text('color').notNull(),
   plate: text('plate').notNull().unique(),
   isActive: boolean('is_active').notNull().default(true),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const rides = pgTable(
@@ -218,10 +247,12 @@ export const rides = pgTable(
     companyId: uuid('company_id')
       .notNull()
       .references(() => companies.id),
+    // onDelete: 'restrict' per migration 0006 — cannot delete rider with rides.
     riderId: uuid('rider_id')
       .notNull()
-      .references(() => riders.id),
-    driverId: uuid('driver_id').references(() => drivers.id),
+      .references(() => riders.id, { onDelete: 'restrict' }),
+    // onDelete: 'restrict' per migration 0006 — cannot delete driver with rides.
+    driverId: uuid('driver_id').references(() => drivers.id, { onDelete: 'restrict' }),
     vehicleId: uuid('vehicle_id').references(() => vehicles.id),
     status: rideStatusEnum('status').notNull().default('requested'),
     pickupLat: doublePrecision('pickup_lat').notNull(),
@@ -230,23 +261,25 @@ export const rides = pgTable(
     dropoffLat: doublePrecision('dropoff_lat').notNull(),
     dropoffLng: doublePrecision('dropoff_lng').notNull(),
     dropoffAddress: text('dropoff_address').notNull(),
-    // PostGIS columns — managed via raw SQL migration; typed as text here for Drizzle compat
-    pickupGeog: text('pickup_geog'),
-    dropoffGeog: text('dropoff_geog'),
+    // PostGIS geography columns — GENERATED ALWAYS AS STORED via migration.
+    // Read-only from Drizzle's perspective: never INSERT or UPDATE these columns.
+    pickupGeog: geographyPoint('pickup_geog'),
+    dropoffGeog: geographyPoint('dropoff_geog'),
+    // distance_km is distance (not money) — doublePrecision is correct here.
     distanceKm: doublePrecision('distance_km'),
     durationMin: integer('duration_min'),
     fareEstimate: numeric('fare_estimate', { precision: 8, scale: 2 }),
     fareFinal: numeric('fare_final', { precision: 8, scale: 2 }),
-    requestedAt: timestamp('requested_at').notNull().defaultNow(),
-    acceptedAt: timestamp('accepted_at'),
-    pickedUpAt: timestamp('picked_up_at'),
-    droppedOffAt: timestamp('dropped_off_at'),
-    cancelledAt: timestamp('cancelled_at'),
+    requestedAt: timestamp('requested_at', { withTimezone: true }).notNull().defaultNow(),
+    acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+    pickedUpAt: timestamp('picked_up_at', { withTimezone: true }),
+    droppedOffAt: timestamp('dropped_off_at', { withTimezone: true }),
+    cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
     cancelReason: text('cancel_reason'),
-    searchExpiresAt: timestamp('search_expires_at'),
-    rejectedDriverIds: text('rejected_driver_ids'), // UUID[] stored as text for Drizzle compat
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    searchExpiresAt: timestamp('search_expires_at', { withTimezone: true }),
+    rejectedDriverIds: uuid('rejected_driver_ids').array(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index('rides_status_idx')
@@ -267,23 +300,25 @@ export const payments = pgTable(
     companyId: uuid('company_id')
       .notNull()
       .references(() => companies.id),
+    // onDelete: 'restrict' per migration 0006 — cannot delete ride with payments.
     rideId: uuid('ride_id')
       .notNull()
-      .references(() => rides.id),
+      .references(() => rides.id, { onDelete: 'restrict' }),
+    // onDelete: 'restrict' per migration 0006 — cannot delete rider with payments.
     riderId: uuid('rider_id')
       .notNull()
-      .references(() => riders.id),
+      .references(() => riders.id, { onDelete: 'restrict' }),
     amount: numeric('amount', { precision: 10, scale: 2 }).notNull(),
     currency: char('currency', { length: 3 }).notNull().default('USD'),
     status: paymentStatusEnum('status').notNull().default('pending'),
     stripePiId: text('stripe_pi_id'),
     stripePmId: text('stripe_pm_id'),
     commissionAmount: numeric('commission_amount', { precision: 10, scale: 2 }),
-    capturedAt: timestamp('captured_at'),
-    refundedAt: timestamp('refunded_at'),
+    capturedAt: timestamp('captured_at', { withTimezone: true }),
+    refundedAt: timestamp('refunded_at', { withTimezone: true }),
     failureReason: text('failure_reason'),
-    failedAt: timestamp('failed_at'),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
+    failedAt: timestamp('failed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index('payments_ride_id_idx').on(t.rideId),
@@ -309,10 +344,10 @@ export const tripOffers = pgTable(
       .notNull()
       .references(() => companies.id),
     status: tripOfferStatusEnum('status').notNull().default('pending'),
-    offeredAt: timestamp('offered_at').notNull().defaultNow(),
-    expiresAt: timestamp('expires_at').notNull(),
-    respondedAt: timestamp('responded_at'),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
+    offeredAt: timestamp('offered_at', { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    respondedAt: timestamp('responded_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index('trip_offers_ride_id_idx').on(t.rideId),
@@ -338,8 +373,8 @@ export const pricingRules = pgTable('pricing_rules', {
   minimumFare: numeric('minimum_fare', { precision: 8, scale: 2 }).notNull().default('7.00'),
   perMinuteRate: numeric('per_minute_rate', { precision: 8, scale: 2 }).notNull().default('0.20'),
   currency: char('currency', { length: 3 }).notNull().default('USD'),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const zoneMinimums = pgTable(
@@ -351,10 +386,10 @@ export const zoneMinimums = pgTable(
       .references(() => companies.id, { onDelete: 'cascade' }),
     zoneName: text('zone_name').notNull(),
     minimumFare: numeric('minimum_fare', { precision: 8, scale: 2 }).notNull(),
-    // PostGIS polygon — managed via raw SQL; typed as text for Drizzle compat
-    boundaryPolygon: text('boundary_polygon'),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    // PostGIS polygon — managed via raw SQL.
+    boundaryPolygon: geographyPolygon('boundary_polygon'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('zone_minimums_company_id_idx').on(t.companyId)],
 );
@@ -371,9 +406,9 @@ export const fixedRoutes = pgTable(
     originLng: doublePrecision('origin_lng').notNull(),
     destLat: doublePrecision('dest_lat').notNull(),
     destLng: doublePrecision('dest_lng').notNull(),
-    // PostGIS geography columns — managed via trigger in SQL migration
-    originGeog: text('origin_geog'),
-    destGeog: text('dest_geog'),
+    // PostGIS geography columns — managed via trigger in SQL migration.
+    originGeog: geographyPoint('origin_geog'),
+    destGeog: geographyPoint('dest_geog'),
     radiusMeters: integer('radius_meters').notNull().default(500),
     fixedPrice: numeric('fixed_price', { precision: 8, scale: 2 }).notNull(),
     // Dynamic pricing preparation (defaults to static/off)
@@ -385,8 +420,8 @@ export const fixedRoutes = pgTable(
     isActive: boolean('is_active').notNull().default(true),
     // Migration tracking
     legacySupabaseId: text('legacy_supabase_id').unique(),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('fixed_routes_company_id_idx').on(t.companyId)],
 );
@@ -412,7 +447,7 @@ export const commissions = pgTable(
     driverEarnings: numeric('driver_earnings', { precision: 10, scale: 2 }).notNull(),
     stripeTransferId: text('stripe_transfer_id'),
     status: text('status').notNull().default('pending'),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index('commissions_company_id_idx').on(t.companyId),
@@ -426,7 +461,7 @@ export const commissions = pgTable(
 export const stripeWebhookEvents = pgTable('stripe_webhook_events', {
   id: text('id').primaryKey(), // Stripe event ID (evt_xxx)
   type: text('type').notNull(),
-  processedAt: timestamp('processed_at').notNull().defaultNow(),
+  processedAt: timestamp('processed_at', { withTimezone: true }).notNull().defaultNow(),
   companyId: uuid('company_id').references(() => companies.id),
 });
 
@@ -448,7 +483,7 @@ export const ratings = pgTable(
     toRiderId: uuid('to_rider_id').references(() => riders.id),
     score: integer('score').notNull(), // 1-5 stars
     comment: text('comment'),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index('ratings_ride_id_idx').on(t.rideId),
@@ -472,7 +507,7 @@ export const driverMetrics = pgTable(
       .references(() => companies.id),
     eventType: text('event_type').notNull(), // cancellation, completion, timeout, rejection
     rideId: uuid('ride_id').references(() => rides.id),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index('driver_metrics_driver_idx').on(t.driverId),
@@ -495,8 +530,8 @@ export const admins = pgTable('admins', {
   legacySupabaseId: text('legacy_supabase_id').unique(),
   updatedBy: uuid('updated_by'),
   migrationSource: migrationSourceEnum('migration_source'),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 // ── Employees (HR / office staff — dispatchers, admin personnel) ─────────────
@@ -513,13 +548,13 @@ export const employees = pgTable(
     fullName: text('full_name').notNull(),
     hourlyRate: numeric('hourly_rate', { precision: 8, scale: 2 }).notNull().default('0'),
     isActive: boolean('is_active').notNull().default(true),
-    deactivatedAt: timestamp('deactivated_at'),
+    deactivatedAt: timestamp('deactivated_at', { withTimezone: true }),
     // Migration tracking
     legacySupabaseId: text('legacy_supabase_id').unique(),
     updatedBy: uuid('updated_by'),
     migrationSource: migrationSourceEnum('migration_source'),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index('employees_company_id_idx').on(t.companyId),
@@ -546,15 +581,15 @@ export const timeEntries = pgTable(
     employeeId: uuid('employee_id')
       .notNull()
       .references(() => employees.id, { onDelete: 'restrict' }),
-    startTime: timestamp('start_time').notNull(),
-    endTime: timestamp('end_time'),
+    startTime: timestamp('start_time', { withTimezone: true }).notNull(),
+    endTime: timestamp('end_time', { withTimezone: true }),
     notes: text('notes'),
     // Migration tracking
     legacySupabaseId: text('legacy_supabase_id').unique(),
     updatedBy: uuid('updated_by'),
     migrationSource: migrationSourceEnum('migration_source'),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index('time_entries_company_id_idx').on(t.companyId),
@@ -563,3 +598,180 @@ export const timeEntries = pgTable(
     index('time_entries_company_period_idx').on(t.companyId, t.startTime),
   ],
 );
+
+// ── Audit Log (tamper-evident, hash-chained — migration 0013) ────────────────
+
+export const auditLog = pgTable(
+  'audit_log',
+  {
+    id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+    occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
+    companyId: uuid('company_id'),
+    actorType: text('actor_type').notNull(),
+    actorId: uuid('actor_id'),
+    actorIpHash: bytea('actor_ip_hash'),
+    action: text('action').notNull(),
+    entityType: text('entity_type').notNull(),
+    entityId: uuid('entity_id'),
+    beforeHash: bytea('before_hash'),
+    afterHash: bytea('after_hash'),
+    diffSummary: text('diff_summary'),
+    requestId: uuid('request_id'),
+    userAgentHash: bytea('user_agent_hash'),
+    prevRowHash: bytea('prev_row_hash'),
+    rowHash: bytea('row_hash').notNull(),
+  },
+  (t) => [
+    index('audit_log_entity_idx').on(t.entityType, t.entityId, t.occurredAt),
+    index('audit_log_actor_idx').on(t.actorType, t.actorId, t.occurredAt),
+  ],
+);
+
+// ══════════════════════════════════════════════════════════════════════════════
+// RELATIONS (Prisma → Drizzle migration, Fase 2)
+// ══════════════════════════════════════════════════════════════════════════════
+
+export const companiesRelations = relations(companies, ({ many }) => ({
+  riders: many(riders),
+  drivers: many(drivers),
+  vehicles: many(vehicles),
+  rides: many(rides),
+  payments: many(payments),
+  tripOffers: many(tripOffers),
+  pricingRules: many(pricingRules),
+  zoneMinimums: many(zoneMinimums),
+  fixedRoutes: many(fixedRoutes),
+  commissions: many(commissions),
+  stripeWebhookEvents: many(stripeWebhookEvents),
+  ratings: many(ratings),
+  driverMetrics: many(driverMetrics),
+  admins: many(admins),
+  employees: many(employees),
+  timeEntries: many(timeEntries),
+}));
+
+export const ridersRelations = relations(riders, ({ one, many }) => ({
+  company: one(companies, { fields: [riders.companyId], references: [companies.id] }),
+  auth: one(ridersAuth, { fields: [riders.id], references: [ridersAuth.riderId] }),
+  rides: many(rides),
+  payments: many(payments),
+  ratingsFrom: many(ratings, { relationName: 'ratingsFromRider' }),
+  ratingsTo: many(ratings, { relationName: 'ratingsToRider' }),
+}));
+
+export const driversRelations = relations(drivers, ({ one, many }) => ({
+  company: one(companies, { fields: [drivers.companyId], references: [companies.id] }),
+  vehicles: many(vehicles),
+  rides: many(rides),
+  tripOffers: many(tripOffers),
+  commissions: many(commissions),
+  ratingsFrom: many(ratings, { relationName: 'ratingsFromDriver' }),
+  ratingsTo: many(ratings, { relationName: 'ratingsToDriver' }),
+  driverMetrics: many(driverMetrics),
+}));
+
+export const ridersAuthRelations = relations(ridersAuth, ({ one }) => ({
+  rider: one(riders, { fields: [ridersAuth.riderId], references: [riders.id] }),
+}));
+
+export const vehiclesRelations = relations(vehicles, ({ one, many }) => ({
+  company: one(companies, { fields: [vehicles.companyId], references: [companies.id] }),
+  driver: one(drivers, { fields: [vehicles.driverId], references: [drivers.id] }),
+  rides: many(rides),
+}));
+
+export const ridesRelations = relations(rides, ({ one, many }) => ({
+  company: one(companies, { fields: [rides.companyId], references: [companies.id] }),
+  rider: one(riders, { fields: [rides.riderId], references: [riders.id] }),
+  driver: one(drivers, { fields: [rides.driverId], references: [drivers.id] }),
+  vehicle: one(vehicles, { fields: [rides.vehicleId], references: [vehicles.id] }),
+  payments: many(payments),
+  tripOffers: many(tripOffers),
+  commissions: many(commissions),
+  ratings: many(ratings),
+  driverMetrics: many(driverMetrics),
+}));
+
+export const paymentsRelations = relations(payments, ({ one }) => ({
+  company: one(companies, { fields: [payments.companyId], references: [companies.id] }),
+  ride: one(rides, { fields: [payments.rideId], references: [rides.id] }),
+  rider: one(riders, { fields: [payments.riderId], references: [riders.id] }),
+}));
+
+export const tripOffersRelations = relations(tripOffers, ({ one }) => ({
+  ride: one(rides, { fields: [tripOffers.rideId], references: [rides.id] }),
+  driver: one(drivers, { fields: [tripOffers.driverId], references: [drivers.id] }),
+  company: one(companies, { fields: [tripOffers.companyId], references: [companies.id] }),
+}));
+
+export const pricingRulesRelations = relations(pricingRules, ({ one }) => ({
+  company: one(companies, { fields: [pricingRules.companyId], references: [companies.id] }),
+}));
+
+export const zoneMinimumsRelations = relations(zoneMinimums, ({ one }) => ({
+  company: one(companies, { fields: [zoneMinimums.companyId], references: [companies.id] }),
+}));
+
+export const fixedRoutesRelations = relations(fixedRoutes, ({ one }) => ({
+  company: one(companies, { fields: [fixedRoutes.companyId], references: [companies.id] }),
+}));
+
+export const commissionsRelations = relations(commissions, ({ one }) => ({
+  company: one(companies, { fields: [commissions.companyId], references: [companies.id] }),
+  ride: one(rides, { fields: [commissions.rideId], references: [rides.id] }),
+  driver: one(drivers, { fields: [commissions.driverId], references: [drivers.id] }),
+}));
+
+export const stripeWebhookEventsRelations = relations(stripeWebhookEvents, ({ one }) => ({
+  company: one(companies, {
+    fields: [stripeWebhookEvents.companyId],
+    references: [companies.id],
+  }),
+}));
+
+export const ratingsRelations = relations(ratings, ({ one }) => ({
+  company: one(companies, { fields: [ratings.companyId], references: [companies.id] }),
+  ride: one(rides, { fields: [ratings.rideId], references: [rides.id] }),
+  fromDriver: one(drivers, {
+    fields: [ratings.fromDriverId],
+    references: [drivers.id],
+    relationName: 'ratingsFromDriver',
+  }),
+  fromRider: one(riders, {
+    fields: [ratings.fromRiderId],
+    references: [riders.id],
+    relationName: 'ratingsFromRider',
+  }),
+  toDriver: one(drivers, {
+    fields: [ratings.toDriverId],
+    references: [drivers.id],
+    relationName: 'ratingsToDriver',
+  }),
+  toRider: one(riders, {
+    fields: [ratings.toRiderId],
+    references: [riders.id],
+    relationName: 'ratingsToRider',
+  }),
+}));
+
+export const driverMetricsRelations = relations(driverMetrics, ({ one }) => ({
+  driver: one(drivers, { fields: [driverMetrics.driverId], references: [drivers.id] }),
+  company: one(companies, { fields: [driverMetrics.companyId], references: [companies.id] }),
+  ride: one(rides, { fields: [driverMetrics.rideId], references: [rides.id] }),
+}));
+
+export const adminsRelations = relations(admins, ({ one, many }) => ({
+  company: one(companies, { fields: [admins.companyId], references: [companies.id] }),
+  employees: many(employees),
+}));
+
+export const employeesRelations = relations(employees, ({ one, many }) => ({
+  company: one(companies, { fields: [employees.companyId], references: [companies.id] }),
+  admin: one(admins, { fields: [employees.adminId], references: [admins.id] }),
+  timeEntries: many(timeEntries),
+}));
+
+export const timeEntriesRelations = relations(timeEntries, ({ one }) => ({
+  company: one(companies, { fields: [timeEntries.companyId], references: [companies.id] }),
+  employee: one(employees, { fields: [timeEntries.employeeId], references: [employees.id] }),
+}));
