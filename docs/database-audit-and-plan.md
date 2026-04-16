@@ -404,15 +404,15 @@ Los 4 agentes coinciden en no hacer estas cosas — están acá para que no se c
 ### Schemas auditados
 
 - `C:/Users/user/Documents/Projects/excellent-taxi/control-de-horas/packages/backend/prisma/schema.prisma`
-- `C:/Users/user/Documents/Projects/confi-tec/taxi-app/packages/db/src/schema/index.ts`
-- `C:/Users/user/Documents/Projects/confi-tec/taxi-app/packages/db/src/migrations/*.sql`
+- `C:/Users/user/Documents/Projects/drivly/taxi-app/packages/db/src/schema/index.ts`
+- `C:/Users/user/Documents/Projects/drivly/taxi-app/packages/db/src/migrations/*.sql`
 
 ### Docs relacionados
 
-- `C:/Users/user/Documents/Projects/confi-tec/taxi-app/docs/schema-unification-plan.md` (parcialmente superseded)
-- `C:/Users/user/Documents/Projects/confi-tec/taxi-app/docs/droplet-capacity-analysis.md`
-- `C:/Users/user/Documents/Projects/confi-tec/taxi-app/docs/adr/001-tech-stack.md`
-- `C:/Users/user/Documents/Projects/confi-tec/taxi-app/CLAUDE.md` (contiene línea P0-1: SHA-256)
+- `C:/Users/user/Documents/Projects/drivly/taxi-app/docs/schema-unification-plan.md` (parcialmente superseded)
+- `C:/Users/user/Documents/Projects/drivly/taxi-app/docs/droplet-capacity-analysis.md`
+- `C:/Users/user/Documents/Projects/drivly/taxi-app/docs/adr/001-tech-stack.md`
+- `C:/Users/user/Documents/Projects/drivly/taxi-app/CLAUDE.md` (contiene línea P0-1: SHA-256)
 - `C:/Users/user/Documents/Projects/excellent-taxi/control-de-horas/CLAUDE.md` (8 capas de seguridad documentadas)
 
 ### Agentes de auditoría (2026-04-11)
