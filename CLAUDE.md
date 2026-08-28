@@ -87,7 +87,7 @@ Copy `.env.example` to `.env`. Key vars:
 
 ## Skills
 
-Este proyecto usa skills de `.claude/skills/` (symlink a repo central). Para actualizar: `cd .claude/skills && git pull`
+Las skills viven en el repo central `rafael1599/skills` (`$SKILLS_PATH`) y se conectan con un symlink **por skill** en `.claude/skills/<nombre>/` (Claude Code solo descubre SKILL.md a un nivel). Para actualizar: `git pull` en ese repo. Para (re)generar los symlinks o habilitar una skill nueva: editar la lista `SKILLS` de `.claude/hooks/link-skills.sh` y correr `bash .claude/hooks/link-skills.sh --local`. En Claude Code web el mismo hook los crea al iniciar la sesión.
 
 ### Preferencias de conexion
 
