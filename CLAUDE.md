@@ -87,8 +87,4 @@ Copy `.env.example` to `.env`. Key vars:
 
 ## Skills
 
-Las skills viven en el repo central `rafael1599/skills` (`$SKILLS_PATH`) y se conectan con un symlink **por skill** en `.claude/skills/<nombre>/` (Claude Code solo descubre SKILL.md a un nivel). Para actualizar: `git pull` en ese repo. Para (re)generar los symlinks o habilitar una skill nueva: editar la lista `SKILLS` de `.claude/hooks/link-skills.sh` y correr `bash .claude/hooks/link-skills.sh --local`. En Claude Code web el mismo hook los crea al iniciar la sesión. Las skills **de proyecto** (`build-apk`) se versionan en `.claude/skills/` (excepción en `.gitignore`, desde el 29 ago 2026: una skill de proyecto cambia con el código); las globales siguen siendo symlinks.
-
-### Preferencias de conexion
-
-- Siempre usar **symlink** para conectar skills (nunca git clone dentro del proyecto)
+Las skills **globales** vienen del plugin `globals@rafael-skills` (marketplace `rafael1599/skills`), declarado en `.claude/settings.json`: Claude Code lo instala solo al abrir el proyecto, también en Claude Code web y en otra máquina. Se invocan como `/globals:<skill>` (p. ej. `/globals:commit-craft`). Tras un push al repo de skills: `claude plugin marketplace update rafael-skills && claude plugin update globals@rafael-skills`. Las skills **de proyecto** (`build-apk`) se versionan en `.claude/skills/<nombre>/`. Nunca copiar ni enlazar skills globales a mano (el esquema de symlinks + hook `link-skills.sh` se retiró el 29 ago 2026).
