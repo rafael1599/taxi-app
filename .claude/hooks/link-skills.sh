@@ -53,6 +53,8 @@ if [ -L "$DEST" ]; then
 fi
 mkdir -p "$DEST"
 
+# Las skills DE PROYECTO se versionan en .claude/skills/ (excepción en .gitignore)
+# y no van en esta lista: aquí solo globales y externas.
 # Skills habilitadas para este proyecto (rutas relativas dentro del repo skills).
 # Cada descripción de skill ocupa contexto en cada sesión: agregar solo las necesarias.
 SKILLS="
@@ -68,7 +70,6 @@ global-skills/adb-device
 global-skills/droplet-ops
 global-skills/prod-data
 global-skills/local-stack-doctor
-project-skills/taxi-app/build-apk
 external-skills/supabase-postgres-best-practices
 external-skills/frontend-design
 external-skills/vercel-react-best-practices

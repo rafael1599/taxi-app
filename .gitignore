@@ -46,8 +46,8 @@ android/
 .whatsapp-sessions/
 
 # Claude (skills symlink + local config)
-.claude/skills
-.claude/skills/
+.claude/skills/*
+!.claude/skills/build-apk/
 
 # Bug reports
 *.zip
